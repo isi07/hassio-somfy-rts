@@ -238,10 +238,12 @@ class PairingWizard:
             sequence = (sequence + 1) & 0xFF
             address = f"{prefix}{sequence:02X}"
 
-        # Lock prefix in somfy_codes.json after first device is added
-        settings = store.get("settings", {})
+        # Lock prefix directly in store (avoids a second load/save cycle that
+        # would overwrite the device entry we're about to add below)
+        settings = store.setdefault("settings", {})
         if not settings.get("prefix_locked", False):
-            set_address_prefix(prefix, lock=True)
+            settings["address_prefix"] = prefix
+            settings["prefix_locked"] = True
 
         # Pre-create entry with RC=0 so it's present even before send_prog()
         entry = _find_or_create_device(store, address, name)

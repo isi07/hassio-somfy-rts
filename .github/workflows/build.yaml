@@ -30,6 +30,12 @@ jobs:
       - name: Run ruff
         run: ruff check somfy-rts/somfy_rts/
 
+      - name: Run tests
+        run: |
+          pip install -r somfy-rts/requirements-test.txt
+          cd somfy-rts
+          pytest tests/ -v
+
       - name: Lint YAML
         run: |
           pip install yamllint
