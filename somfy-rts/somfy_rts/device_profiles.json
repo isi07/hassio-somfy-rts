@@ -1,0 +1,79 @@
+{
+  "awning": {
+    "device_class": "awning",
+    "icon": "mdi:awning",
+    "buttons": {
+      "open":  {"rts": "OPEN",  "label": "Ausfahren", "icon": "mdi:arrow-up-circle"},
+      "close": {"rts": "CLOSE", "label": "Einfahren", "icon": "mdi:arrow-down-circle"},
+      "stop":  {"rts": "STOP",  "label": "Stop",      "icon": "mdi:stop-circle"}
+    },
+    "default_travel_time_open": 35,
+    "default_travel_time_close": 38
+  },
+  "shutter": {
+    "device_class": "shutter",
+    "icon": "mdi:window-shutter",
+    "buttons": {
+      "open":  {"rts": "OPEN",  "label": "Hochfahren",  "icon": "mdi:arrow-up-circle"},
+      "close": {"rts": "CLOSE", "label": "Runterfahren", "icon": "mdi:arrow-down-circle"},
+      "stop":  {"rts": "STOP",  "label": "Stop",         "icon": "mdi:stop-circle"}
+    },
+    "default_travel_time_open": 20,
+    "default_travel_time_close": 22
+  },
+  "blind": {
+    "device_class": "blind",
+    "icon": "mdi:blinds",
+    "buttons": {
+      "open":  {"rts": "OPEN",  "label": "Öffnen",    "icon": "mdi:arrow-up-circle"},
+      "close": {"rts": "CLOSE", "label": "Schließen", "icon": "mdi:arrow-down-circle"},
+      "stop":  {"rts": "STOP",  "label": "Stop",      "icon": "mdi:stop-circle"}
+    },
+    "default_travel_time_open": 15,
+    "default_travel_time_close": 16
+  },
+  "screen": {
+    "device_class": "shade",
+    "icon": "mdi:roller-shade",
+    "buttons": {
+      "open":  {"rts": "OPEN",  "label": "Hochfahren",  "icon": "mdi:arrow-up-circle"},
+      "close": {"rts": "CLOSE", "label": "Runterfahren", "icon": "mdi:arrow-down-circle"},
+      "stop":  {"rts": "STOP",  "label": "Stop",         "icon": "mdi:stop-circle"}
+    },
+    "default_travel_time_open": 30,
+    "default_travel_time_close": 32
+  },
+  "gate": {
+    "device_class": "gate",
+    "icon": "mdi:gate",
+    "buttons": {
+      "open":  {"rts": "OPEN",  "label": "Öffnen",    "icon": "mdi:gate-open"},
+      "close": {"rts": "CLOSE", "label": "Schließen", "icon": "mdi:gate"},
+      "stop":  {"rts": "STOP",  "label": "Stop",      "icon": "mdi:stop-circle"}
+    },
+    "default_travel_time_open": 15,
+    "default_travel_time_close": 15
+  },
+  "light": {
+    "device_class": null,
+    "icon": "mdi:lightbulb",
+    "buttons": {
+      "open":  {"rts": "OPEN",  "label": "Ein",  "icon": "mdi:lightbulb-on"},
+      "close": {"rts": "CLOSE", "label": "Aus",  "icon": "mdi:lightbulb-off"},
+      "stop":  {"rts": "STOP",  "label": "Stop", "icon": "mdi:stop-circle"}
+    },
+    "default_travel_time_open": 5,
+    "default_travel_time_close": 5
+  },
+  "heater": {
+    "device_class": null,
+    "icon": "mdi:radiator",
+    "buttons": {
+      "open":  {"rts": "OPEN",  "label": "Ein",  "icon": "mdi:radiator"},
+      "close": {"rts": "CLOSE", "label": "Aus",  "icon": "mdi:radiator-off"},
+      "stop":  {"rts": "STOP",  "label": "Stop", "icon": "mdi:stop-circle"}
+    },
+    "default_travel_time_open": 5,
+    "default_travel_time_close": 5
+  }
+}

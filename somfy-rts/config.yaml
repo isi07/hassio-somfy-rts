@@ -1,0 +1,48 @@
+name: Somfy RTS
+version: "0.1.0"
+slug: somfy_rts
+description: Steuert Somfy RTS Geräte (Markisen, Rollläden, Jalousien) über NanoCUL USB mit culfw-Firmware via MQTT
+url: https://github.com/isi07/hassio-somfy-rts
+codenotice: https://github.com/isi07/hassio-somfy-rts/blob/main/LICENSE
+
+arch:
+  - amd64
+  - aarch64
+  - armv7
+
+startup: application
+boot: auto
+
+map:
+  - data:rw
+
+uart: true
+
+options:
+  serial_port: /dev/ttyUSB0
+  baud_rate: 38400
+  mqtt_host: core-mosquitto
+  mqtt_port: 1883
+  mqtt_user: ""
+  mqtt_password: ""
+  mqtt_topic_prefix: somfy
+  log_level: INFO
+  devices: []
+
+schema:
+  serial_port: str
+  baud_rate: int
+  mqtt_host: str
+  mqtt_port: int
+  mqtt_user: str
+  mqtt_password: password
+  mqtt_topic_prefix: str
+  log_level: list(DEBUG|INFO|WARNING|ERROR)?
+  devices:
+    - name: str
+      type: list(awning|shutter|blind|screen|gate|light|heater)
+      address: str
+      mode: list(A|B)?
+      rolling_code: int?
+
+image: ghcr.io/isi07/hassio-somfy-rts/somfy-rts

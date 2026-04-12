@@ -1,0 +1,217 @@
+blueprint:
+  name: "Somfy RTS — Rollladen (Template Cover)"
+  description: >
+    Erstellt ein Template Cover für Somfy RTS Rollläden.
+
+    Erfordert HA 2024.11+ und das Somfy RTS Add-on.
+
+    **Modus A**: Das Somfy-Cover wrappen und um Fensterkontakt + Fahrzeit-Schätzung erweitern.
+
+    Funktionen:
+    - Fensterkontakt hat Priorität vor Fahrzeit-Schätzung
+    - Positions-Schätzung via Timer (optional)
+    - time_pattern Trigger `/1s` nur aktiv wenn Timer läuft
+
+  domain: template
+
+  input:
+    name:
+      name: Name des Template Covers
+      description: Name der neuen Cover-Entität in Home Assistant
+      default: Rollladen
+      selector:
+        text: {}
+
+    somfy_cover_entity:
+      name: Somfy Cover Entität
+      description: Das vom Somfy RTS Add-on erstellte Cover (Modus A)
+      selector:
+        entity:
+          domain: cover
+
+    device_class:
+      name: Gerätetyp
+      description: Beeinflusst Icons und Texte in der HA-Oberfläche
+      default: shutter
+      selector:
+        select:
+          options:
+            - label: Rollladen
+              value: shutter
+            - label: Markise
+              value: awning
+            - label: Jalousie
+              value: blind
+            - label: Sonnenschutz
+              value: shade
+            - label: Tor
+              value: gate
+
+    contact_sensor:
+      name: Fensterkontakt (optional)
+      description: >
+        Wenn gesetzt: Cover kann nicht geschlossen werden solange Fenster offen ist.
+        Fensterkontakt hat Priorität vor Fahrzeit-Schätzung.
+      default: ""
+      selector:
+        entity:
+          domain: binary_sensor
+
+    contact_closed_state:
+      name: Kontakt-Zustand = Fenster geschlossen
+      description: Welcher Sensor-Zustand bedeutet "Fenster geschlossen"?
+      default: "off"
+      selector:
+        select:
+          options:
+            - label: "off (Ruhekontakt)"
+              value: "off"
+            - label: "on (Arbeitskontakt)"
+              value: "on"
+
+    use_travel_time:
+      name: Fahrzeit-Schätzung aktivieren
+      description: >
+        Aktiviert Positions-Schätzung basierend auf Fahrzeit.
+        Erfordert eine Timer-Entität.
+      default: false
+      selector:
+        boolean: {}
+
+    travel_timer:
+      name: Fahrzeit-Timer
+      description: Timer-Entität für Positions-Schätzung (nur bei aktivierter Fahrzeit)
+      default: ""
+      selector:
+        entity:
+          domain: timer
+
+    travel_time_open:
+      name: Fahrzeit Hochfahren (Sekunden)
+      description: Zeit in Sekunden vom vollständig unten bis vollständig oben
+      default: 40
+      selector:
+        number:
+          min: 5
+          max: 300
+          unit_of_measurement: s
+          mode: slider
+
+    travel_time_close:
+      name: Fahrzeit Runterfahren (Sekunden)
+      description: Zeit in Sekunden vom vollständig oben bis vollständig unten
+      default: 43
+      selector:
+        number:
+          min: 5
+          max: 300
+          unit_of_measurement: s
+          mode: slider
+
+cover:
+  - name: !input name
+    device_class: !input device_class
+    unique_id: "somfy_rts_tpl_{{ somfy_cover_entity | replace('.', '_') }}"
+
+    # ---------- Position ----------
+    # Priority: 1. contact sensor, 2. travel time timer, 3. cover state
+    position_template: >
+      {% set cover = somfy_cover_entity %}
+      {% set contact = contact_sensor %}
+      {% set closed_state = contact_closed_state %}
+      {% set use_timer = use_travel_time %}
+      {% set timer = travel_timer %}
+      {% set t_open = travel_time_open | float %}
+      {% set t_close = travel_time_close | float %}
+
+      {% if contact != '' and states(contact) != closed_state %}
+        100
+      {% elif use_timer and timer != '' and is_state(timer, 'active') %}
+        {% set remaining = state_attr(timer, 'remaining') %}
+        {% if remaining is not none %}
+          {% set r_sec = (remaining | string).split(':') %}
+          {% set r_total = r_sec[0] | int * 3600 + r_sec[1] | int * 60 + r_sec[2] | int %}
+          {% set cover_state = states(cover) %}
+          {% if cover_state == 'closing' %}
+            {{ [(r_total / t_close * 100) | round, 100] | min | int }}
+          {% elif cover_state == 'opening' %}
+            {{ [100 - (r_total / t_open * 100) | round, 0] | max | int }}
+          {% else %}
+            {{ state_attr(cover, 'current_position') | default(50) }}
+          {% endif %}
+        {% else %}
+          {{ state_attr(cover, 'current_position') | default(50) }}
+        {% endif %}
+      {% else %}
+        {{ state_attr(cover, 'current_position') | default(50) }}
+      {% endif %}
+
+    # ---------- State ----------
+    value_template: >
+      {% set contact = contact_sensor %}
+      {% set closed_state = contact_closed_state %}
+      {% if contact != '' and states(contact) != closed_state %}
+        open
+      {% else %}
+        {{ states(somfy_cover_entity) }}
+      {% endif %}
+
+    # ---------- Availability ----------
+    availability_template: >
+      {{ states(somfy_cover_entity) not in ['unavailable', 'unknown'] }}
+
+    # ---------- Actions ----------
+    open_cover:
+      action: cover.open_cover
+      target:
+        entity_id: !input somfy_cover_entity
+
+    close_cover:
+      # Contact sensor lock: block close when window is open
+      choose:
+        - conditions:
+            - condition: template
+              value_template: >
+                {% set contact = contact_sensor %}
+                {% set closed_state = contact_closed_state %}
+                {{ contact == '' or states(contact) == closed_state }}
+          sequence:
+            - action: cover.close_cover
+              target:
+                entity_id: !input somfy_cover_entity
+      default:
+        - action: system_log.write
+          data:
+            message: "Somfy RTS: Schließen blockiert — Fenster noch offen."
+            level: warning
+
+    stop_cover:
+      action: cover.stop_cover
+      target:
+        entity_id: !input somfy_cover_entity
+
+    set_cover_position:
+      choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ position > 50 }}"
+          sequence:
+            - action: cover.open_cover
+              target:
+                entity_id: !input somfy_cover_entity
+        - conditions:
+            - condition: template
+              value_template: "{{ position <= 50 }}"
+          sequence:
+            - action: cover.close_cover
+              target:
+                entity_id: !input somfy_cover_entity
+
+  variables:
+    somfy_cover_entity: !input somfy_cover_entity
+    contact_sensor: !input contact_sensor
+    contact_closed_state: !input contact_closed_state
+    use_travel_time: !input use_travel_time
+    travel_timer: !input travel_timer
+    travel_time_open: !input travel_time_open
+    travel_time_close: !input travel_time_close
