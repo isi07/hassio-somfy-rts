@@ -1,4 +1,4 @@
-"""Einstiegspunkt des Somfy RTS Add-ons."""
+"""Add-on entry point."""
 
 import logging
 import signal
@@ -7,13 +7,12 @@ import time
 
 from . import __version__
 from .config import load_config
-from .device import Device
 from .gateway import CULGateway, GatewayError
 from .mqtt_client import MQTTClient
+from .rolling_code import _load as load_codes
 
 
 def main() -> None:
-    # Basis-Logging bis Config geladen ist
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -21,73 +20,61 @@ def main() -> None:
         stream=sys.stdout,
     )
     logger = logging.getLogger(__name__)
-    logger.info("=== Somfy RTS Add-on v%s startet ===", __version__)
+    logger.info("=== Somfy RTS Add-on v%s starting ===", __version__)
 
     config = load_config()
-
-    # Log-Level aus Konfiguration anwenden
     logging.getLogger().setLevel(getattr(logging, config.log_level, logging.INFO))
 
-    if not config.devices:
-        logger.warning(
-            "Keine Geräte konfiguriert — bitte 'devices' in der Add-on Konfiguration eintragen."
-        )
+    # Load device list from somfy_codes.json (source of truth for devices)
+    store = load_codes()
+    device_count = len(store.get("devices", []))
+    logger.info("Found %d device(s) in somfy_codes.json.", device_count)
 
-    gateway = CULGateway(config.serial_port, config.baud_rate)
+    gateway = CULGateway(config.usb_port, config.baudrate)
     mqtt_client = MQTTClient(config)
 
     running = True
 
     def _shutdown(signum, frame):
         nonlocal running
-        logger.info("Signal %d empfangen — beende Add-on...", signum)
+        logger.info("Signal %d received — shutting down...", signum)
         running = False
 
     signal.signal(signal.SIGTERM, _shutdown)
     signal.signal(signal.SIGINT, _shutdown)
 
-    # Gateway verbinden (mit Retry bis SIGTERM)
+    # Connect gateway with retry until SIGTERM
     while running:
         try:
             gateway.connect()
             break
         except GatewayError as e:
-            logger.error("Gateway-Fehler: %s — neuer Versuch in 10s.", e)
+            logger.error("Gateway error: %s — retrying in 10s.", e)
             time.sleep(10)
 
     if not running:
         sys.exit(0)
 
-    # MQTT verbinden
+    # Connect MQTT
     try:
         mqtt_client.connect()
     except RuntimeError as e:
-        logger.error("MQTT Fehler: %s", e)
+        logger.error("MQTT error: %s", e)
         gateway.disconnect()
         sys.exit(1)
 
-    # Gateway-Device in HA registrieren
-    mqtt_client.register_gateway(gateway.port_name, len(config.devices))
+    # Register gateway device in HA
+    mqtt_client.register_gateway(gateway.port_name, device_count)
 
-    # Geräte anlegen und registrieren
-    devices = [Device(dev, gateway, mqtt_client) for dev in config.devices]
-    for device in devices:
-        device.setup()
+    logger.info("Add-on running — waiting for MQTT commands...")
 
-    logger.info(
-        "Add-on läuft — %d Gerät(e) registriert. Warte auf MQTT-Befehle...",
-        len(devices),
-    )
-
-    # Hauptschleife
     while running:
         time.sleep(1)
 
-    # Geordnetes Herunterfahren
     mqtt_client.update_gateway_status("Offline")
     mqtt_client.disconnect()
     gateway.disconnect()
-    logger.info("Somfy RTS Add-on beendet.")
+    logger.info("Somfy RTS Add-on stopped.")
 
 
 if __name__ == "__main__":

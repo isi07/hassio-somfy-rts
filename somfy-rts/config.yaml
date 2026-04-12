@@ -1,48 +1,52 @@
-name: Somfy RTS
+name: "Somfy RTS"
 version: "0.1.0"
 slug: somfy_rts
-description: Steuert Somfy RTS Geräte (Markisen, Rollläden, Jalousien) über NanoCUL USB mit culfw-Firmware via MQTT
-url: https://github.com/isi07/hassio-somfy-rts
-codenotice: https://github.com/isi07/hassio-somfy-rts/blob/main/LICENSE
+description: "Controls Somfy RTS devices (awnings, shutters) via NanoCUL USB stick with culfw firmware over MQTT"
+url: "https://github.com/isi07/hassio-somfy-rts"
+license: MIT
 
 arch:
-  - amd64
   - aarch64
+  - amd64
   - armv7
 
 startup: application
 boot: auto
+init: false
 
-map:
-  - data:rw
+homeassistant: "2024.11.0"
 
 uart: true
 
+map:
+  - type: data
+    read_only: false
+
+ports:
+  8099/tcp: 8099
+
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:blinds
+
 options:
-  serial_port: /dev/ttyUSB0
-  baud_rate: 38400
-  mqtt_host: core-mosquitto
+  mqtt_host: "core-mosquitto"
   mqtt_port: 1883
   mqtt_user: ""
   mqtt_password: ""
-  mqtt_topic_prefix: somfy
-  log_level: INFO
-  devices: []
+  usb_port: "/dev/ttyACM0"
+  baudrate: 9600
+  address_prefix: "A000"
+  log_level: "info"
 
 schema:
-  serial_port: str
-  baud_rate: int
   mqtt_host: str
   mqtt_port: int
   mqtt_user: str
-  mqtt_password: password
-  mqtt_topic_prefix: str
-  log_level: list(DEBUG|INFO|WARNING|ERROR)?
-  devices:
-    - name: str
-      type: list(awning|shutter|blind|screen|gate|light|heater)
-      address: str
-      mode: list(A|B)?
-      rolling_code: int?
+  mqtt_password: str
+  usb_port: str
+  baudrate: int
+  address_prefix: str
+  log_level: list(debug|info|warning|error)
 
-image: ghcr.io/isi07/hassio-somfy-rts/somfy-rts
+image: "ghcr.io/isi07/hassio-somfy-rts/somfy-rts"

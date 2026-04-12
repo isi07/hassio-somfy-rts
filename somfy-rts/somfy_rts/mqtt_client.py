@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 HA_DISCOVERY = "homeassistant"
 LWT_TOPIC = "cul2mqtt/status"
 GW_TOPIC_BASE = "cul2mqtt/gateway"
+MQTT_TOPIC_PREFIX = "somfy"
 
 ORIGIN = {
     "name": "Somfy RTS",
@@ -153,7 +154,7 @@ class MQTTClient:
         """Modus A: Optimistisches MQTT Cover-Entity.
         device_class kommt aus dem Profil (device_profiles.json).
         """
-        prefix = self._config.mqtt_topic_prefix
+        prefix = MQTT_TOPIC_PREFIX
         slug = device.slug
         state_topic = f"{prefix}/{slug}/state"
         command_topic = f"{prefix}/{slug}/set"
@@ -193,7 +194,7 @@ class MQTTClient:
         """Modus B: 3 Button-Entities (config) + 2 Diagnose-Sensoren.
         Button-Labels und Icons kommen aus device_profiles.json.
         """
-        prefix = self._config.mqtt_topic_prefix
+        prefix = MQTT_TOPIC_PREFIX
         slug = device.slug
         sub_dev = _sub_device(device, profile)
         avail = _avail_block()
@@ -248,12 +249,12 @@ class MQTTClient:
 
     def publish_state(self, device: DeviceConfig, state: str) -> None:
         """Modus A: Veröffentlicht Cover-Status (open/closed/stopped)."""
-        topic = f"{self._config.mqtt_topic_prefix}/{device.slug}/state"
+        topic = f"{MQTT_TOPIC_PREFIX}/{device.slug}/state"
         self._client.publish(topic, state, retain=True)
 
     def publish_diagnostic(self, device: DeviceConfig, key: str, value: str) -> None:
         """Modus B: Aktualisiert einen Diagnose-Sensor (rolling_code / last_command)."""
-        topic = f"{self._config.mqtt_topic_prefix}/{device.slug}/{key}"
+        topic = f"{MQTT_TOPIC_PREFIX}/{device.slug}/{key}"
         self._client.publish(topic, value, retain=True)
 
     # ---------- Interna ----------
