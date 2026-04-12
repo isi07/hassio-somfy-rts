@@ -19,7 +19,7 @@ ioBroker import:
 
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Optional
 
@@ -28,7 +28,6 @@ from .rolling_code import (
     _load,
     _save_atomic,
     _find_or_create_device,
-    get_settings,
     set_address_prefix,
 )
 from . import rts as rts_module
