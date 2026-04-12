@@ -28,7 +28,6 @@ from .rolling_code import (
     _load,
     _save_atomic,
     _find_or_create_device,
-    set_address_prefix,
 )
 from . import rts as rts_module
 
