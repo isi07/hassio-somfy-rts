@@ -14,7 +14,7 @@ und **MQTT**.
 
 | Add-on | Version | Beschreibung |
 |--------|---------|--------------|
-| [Somfy RTS](somfy-rts/DOCS.md) | 0.1.0 | Steuerung von Somfy RTS Geräten via NanoCUL/culfw |
+| [Somfy RTS](somfy-rts/DOCS.md) | 0.1.2 | Steuerung von Somfy RTS Geräten via NanoCUL/culfw |
 
 ---
 
@@ -36,26 +36,17 @@ Das Add-on "Somfy RTS" erscheint im Add-on Store unter dem neuen Repository.
 
 ### Schritt 3 — Konfigurieren
 
-Beispielkonfiguration:
+Minimale Konfiguration (Geräte werden per Anlern-Wizard hinzugefügt):
 
 ```yaml
-serial_port: /dev/ttyUSB0
-baud_rate: 38400
+usb_port: /dev/ttyACM0      # Pfad zum NanoCUL USB-Stick
+baudrate: 9600
 mqtt_host: core-mosquitto
 mqtt_port: 1883
 mqtt_user: ""
 mqtt_password: ""
-mqtt_topic_prefix: somfy
-
-devices:
-  - name: Terrasse Markise
-    type: awning
-    address: A1B2C3
-    rolling_code: 0
-  - name: Wohnzimmer Rollladen
-    type: roller_shutter
-    address: D4E5F6
-    rolling_code: 0
+address_prefix: "A000"      # Präfix für automatisch generierte Adressen
+log_level: info
 ```
 
 Vollständige Dokumentation: [DOCS.md](somfy-rts/DOCS.md)
@@ -64,10 +55,24 @@ Vollständige Dokumentation: [DOCS.md](somfy-rts/DOCS.md)
 
 ## Hardware-Voraussetzungen
 
-- **NanoCUL USB-Stick** mit culfw-Firmware (433,42 MHz)
+- **NanoCUL USB-Stick** mit culfw-Firmware (**433,42 MHz** — nicht 433,92 MHz!)
   - Verfügbar z.B. bei busware.de oder als DIY-Bausatz
   - culfw muss bereits geflasht sein
 - Somfy RTS kompatible Geräte (Motoren mit dem RTS-Protokoll)
+
+---
+
+## Unterstützte Gerätetypen
+
+| Typ | HA Geräteklasse | Beispiel |
+|-----|----------------|---------|
+| `awning` | awning | Markise |
+| `shutter` | shutter | Rollladen |
+| `blind` | blind | Jalousie / Raffstore |
+| `screen` | shade | Insektenschutzrollo |
+| `gate` | gate | Garagentor / Tor |
+| `light` | — | Somfy-kompatibles Licht |
+| `heater` | — | Heizung |
 
 ---
 
@@ -85,7 +90,7 @@ Home Assistant
      │           │
      ▼           ▼
  433,42 MHz   HA Entitäten
- Funk-Signal  (Cover)
+ Funk-Signal  (Cover / Buttons)
      │
      ▼
  Somfy RTS Motor
@@ -95,11 +100,11 @@ Home Assistant
 
 ## Blueprints
 
-Im Ordner `blueprints/template/` befinden sich vorgefertigte Automatisierungs-
-Blueprints:
+Im Ordner `blueprints/template/` befinden sich vorgefertigte Template-Blueprints
+(HA 2024.11+):
 
-- **somfy_markise.yaml** — Zeitsteuerung, Windschutz, Regenschutz
-- **somfy_rollladen.yaml** — Sonnenaufgang/Sonnenuntergang, Anwesenheit
+- **somfy_rts_awning.yaml** — Template Cover für Markisen (Fensterkontakt, Fahrzeit)
+- **somfy_rts_shutter.yaml** — Template Cover für Rollläden (Fensterkontakt, Fahrzeit)
 
 ---
 

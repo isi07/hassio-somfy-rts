@@ -31,7 +31,7 @@ Jalousien usw.) über einen **NanoCUL USB-Stick** mit **culfw-Firmware** via **M
 ## Hardware
 
 - **NanoCUL USB-Stick** mit culfw-Firmware (**433,42 MHz** — nicht 433.92!)
-- Kommunikation über serielle Schnittstelle (z.B. `/dev/ttyUSB0`), 38400 Baud
+- Kommunikation über serielle Schnittstelle (z.B. `/dev/ttyACM0`), 9600 Baud
 - Sendet RTS-Telegramme; **Checksumme und Verschlüsselung übernimmt culfw intern**
 
 ---
@@ -117,16 +117,16 @@ hassio-somfy-rts/
 │       ├── main.py                    # Einstiegspunkt
 │       ├── config.py                  # Liest /data/options.json
 │       ├── gateway.py                 # BaseGateway (ABC) + CULGateway
-│       ├── cul.py                     # Shim → gateway.py (Rückwärtskompatibilität)
 │       ├── rolling_code.py            # Atomare RC-Persistenz (/data/somfy_codes.json)
 │       ├── rts.py                     # build_rts_sequence() — culfw-Befehlsbau
 │       ├── mqtt_client.py             # MQTT + HA Discovery (Modus A/B, LWT, Origin)
-│       ├── cover.py                   # Cover-Entitäts-Logik (Modus A/B)
+│       ├── device.py                  # Device-Klasse (alle 7 Typen, Modus A/B)
+│       ├── wizard.py                  # PairingWizard (5-Schritt Anlern-Flow)
 │       └── device_profiles.json      # Gerätetyp-Definitionen
 └── blueprints/
     └── template/
-        ├── somfy_markise.yaml         # Template Cover mit Fensterkontakt + Fahrzeit
-        └── somfy_rollladen.yaml       # Automation: Sonne + Anwesenheit
+        ├── somfy_rts_awning.yaml      # Template Cover Markise: Fensterkontakt + Fahrzeit
+        └── somfy_rts_shutter.yaml     # Template Cover Rollladen: Fensterkontakt + Fahrzeit
 ```
 
 ---
@@ -173,25 +173,30 @@ BaseGateway (ABC)          # gateway.py
 
 | Option | Typ | Standard | Beschreibung |
 |---|---|---|---|
-| `serial_port` | string | `/dev/ttyUSB0` | NanoCUL Pfad |
-| `baud_rate` | int | 38400 | Baudrate |
+| `usb_port` | string | `/dev/ttyACM0` | NanoCUL Pfad |
+| `baudrate` | int | 9600 | Baudrate |
 | `mqtt_host` | string | `core-mosquitto` | MQTT Broker |
 | `mqtt_port` | int | 1883 | MQTT Port |
 | `mqtt_user` | string | `""` | MQTT Benutzer |
 | `mqtt_password` | password | `""` | MQTT Passwort |
-| `mqtt_topic_prefix` | string | `somfy` | MQTT Topic Präfix |
-| `log_level` | enum | `INFO` | DEBUG/INFO/WARNING/ERROR |
-| `devices` | list | `[]` | Geräteliste |
+| `address_prefix` | string | `A000` | Präfix für neue Adressen (4 Hex-Zeichen) |
+| `log_level` | enum | `info` | debug/info/warning/error |
 
-### Device-Schema
+Geräte werden **nicht** in `config.yaml` verwaltet, sondern in `/data/somfy_codes.json`
+(automatisch durch den Anlern-Wizard oder ioBroker-Import erstellt).
 
-```yaml
-devices:
-  - name: "Wohnzimmer Markise"
-    type: awning        # awning | shutter | blind | screen | gate | light | heater
-    address: "A1B2C3"  # 6 Hex-Zeichen (eindeutig!)
-    mode: "A"           # A = Cover | B = Buttons
-    rolling_code: 0     # Startwert (Persistenz in somfy_codes.json)
+### Device-Schema (somfy_codes.json)
+
+```json
+{
+  "devices": [
+    {
+      "address": "A1B2C3",
+      "name": "Wohnzimmer Markise",
+      "rolling_code": 42
+    }
+  ]
+}
 ```
 
 ---
@@ -273,13 +278,18 @@ Erstellt ein Template Cover für Rollläden:
 
 ---
 
-## Anlern-Wizard (5 Schritte)
+## Anlern-Wizard (`wizard.py`)
 
-1. Gerät in `config.yaml` eintragen (`rolling_code: 0`)
-2. Add-on neu starten → MQTT Discovery veröffentlicht neue Entität
-3. Motor in Programmiermodus versetzen (Orig.-FB PROG 3s halten → kurzes Auf-Ab)
-4. In HA: Button/Cover STOP senden (= PROG-Signal, cmd=0x8 oder 0x1)
-5. Motor bestätigt mit kurzem Auf-Ab → Pairing abgeschlossen
+Der `PairingWizard` steuert den 5-stufigen Anlern-Flow:
+
+1. `wizard.start(name, device_type)` — Adresse generieren, RC auf 0 setzen, in `somfy_codes.json` voranlegen
+2. Motor in Programmiermodus versetzen (Orig.-FB PROG 3s halten → kurzes Auf-Ab)
+3. `wizard.send_prog()` — PROG-Telegramm (cmd=0x8) via CUL senden
+4. Operator sieht Motor-Bestätigungsbewegung → `wizard.confirm()` aufrufen
+5. `wizard.get_device_config()` — Config-Dict für `options.json`-Geräteliste zurückgeben
+
+**ioBroker-Import:** `PairingWizard.import_from_iobroker(name, type, address, rolling_code)`  
+Rolling Code muss ≥ letzter ioBroker-Wert sein (Sicherheitsmarge +10 empfohlen).
 
 ---
 
