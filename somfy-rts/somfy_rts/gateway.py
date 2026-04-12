@@ -53,7 +53,7 @@ class CULGateway(BaseGateway):
     wir senden nur Roh-Strings, culfw übernimmt Checksumme und Verschlüsselung.
     """
 
-    def __init__(self, port: str, baud_rate: int = 38400):
+    def __init__(self, port: str, baud_rate: int = 9600):
         self._port = port
         self._baud_rate = baud_rate
         self._serial: Optional[serial.Serial] = None
@@ -69,10 +69,14 @@ class CULGateway(BaseGateway):
                 stopbits=serial.STOPBITS_ONE,
                 timeout=2.0,
             )
-            time.sleep(0.5)  # Warten auf culfw-Initialisierung
+            time.sleep(0.5)  # Wait for culfw to initialize
             self._flush()
             version = self._query_version()
-            logger.info("NanoCUL verbunden auf %s — %s", self._port, version)
+            # Enable Somfy RTS mode in culfw
+            self._serial.write(b"X21\n")
+            self._serial.flush()
+            time.sleep(0.5)  # Wait until CUL is ready to receive RTS commands
+            logger.info("NanoCUL verbunden auf %s — %s (RTS Modus aktiv)", self._port, version)
         except serial.SerialException as e:
             raise GatewayError(f"Kann {self._port} nicht öffnen: {e}") from e
 
