@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*"      # v0.1.0, v0.1.0-beta.1, v1.0.0 ...
+    branches:
+      - main
   pull_request:
     branches:
       - main
@@ -86,7 +88,7 @@ jobs:
   build:
     name: Build & push multi-arch image
     runs-on: ubuntu-latest
-    # Build only on tag pushes, independent of lint
+    needs: lint
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
