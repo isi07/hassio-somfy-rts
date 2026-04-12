@@ -28,6 +28,28 @@ jobs:
       - name: Run ruff
         run: ruff check somfy-rts/somfy_rts/
 
+      - name: Lint YAML
+        run: |
+          pip install yamllint
+          yamllint -d relaxed .github/workflows/build.yaml
+          yamllint -d relaxed blueprints/template/
+          yamllint -d relaxed somfy-rts/config.yaml
+
+      - name: Lint Shell
+        run: |
+          sudo apt-get install -y shellcheck
+          shellcheck somfy-rts/run.sh
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: somfy-rts/Dockerfile
+
+      - name: Validate JSON
+        run: |
+          python -m json.tool somfy-rts/somfy_rts/device_profiles.json > /dev/null
+          echo "JSON valid"
+
   build:
     name: Build & push multi-arch image
     runs-on: ubuntu-latest

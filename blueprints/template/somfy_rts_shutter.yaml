@@ -207,11 +207,11 @@ cover:
               target:
                 entity_id: !input somfy_cover_entity
 
-  variables:
-    somfy_cover_entity: !input somfy_cover_entity
-    contact_sensor: !input contact_sensor
-    contact_closed_state: !input contact_closed_state
-    use_travel_time: !input use_travel_time
-    travel_timer: !input travel_timer
-    travel_time_open: !input travel_time_open
-    travel_time_close: !input travel_time_close
+variables:
+  somfy_cover_entity: !input somfy_cover_entity
+  contact_sensor: !input contact_sensor
+  contact_closed_state: !input contact_closed_state
+  use_travel_time: !input use_travel_time
+  travel_timer: !input travel_timer
+  travel_time_open: !input travel_time_open
+  travel_time_close: !input travel_time_close
