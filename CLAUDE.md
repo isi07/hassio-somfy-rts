@@ -1,4 +1,4 @@
-# CLAUDE.md — Somfy RTS Home Assistant Add-on
+# CLAUDE.md — Somfy RTS Home Assistant App
 
 ## Projektübersicht
 
@@ -8,8 +8,8 @@
 **Version:** 0.1.0  
 **Maintainer:** isi07
 
-Dieses Repository ist ein **Home Assistant Add-on Repository**, das das Add-on
-"Somfy RTS" enthält. Das Add-on steuert Somfy RTS Geräte (Markisen, Rollläden,
+Dieses Repository ist ein **Home Assistant App-Repository** (ehemals Add-on-Repository),
+das die App "Somfy RTS" enthält. Die App steuert Somfy RTS Geräte (Markisen, Rollläden,
 Jalousien usw.) über einen **NanoCUL USB-Stick** mit **culfw-Firmware** via **MQTT**.
 
 ---
@@ -18,12 +18,12 @@ Jalousien usw.) über einen **NanoCUL USB-Stick** mit **culfw-Firmware** via **M
 
 | Komponente | Details |
 |---|---|
-| Add-on Runtime | Docker (baseimage: `ghcr.io/home-assistant/amd64-base-python:3.11`) |
+| App Runtime | Docker (baseimage: `ghcr.io/home-assistant/amd64-base-python:3.11`) |
 | Sprache | Python 3.11 |
 | Protokoll | Somfy RTS (433,42 MHz) über NanoCUL USB (culfw) |
 | Kommunikation | MQTT (Paho) → Home Assistant |
 | HA-Integration | MQTT Discovery (Cover/Button-Entitäten) |
-| Config | Add-on Options (`/data/options.json`) |
+| Config | App-Options (`/data/options.json`) |
 | Versionierung | Conventional Commits + git-cliff + semver Tags |
 
 ---
@@ -99,14 +99,14 @@ ignoriert Telegramme mit repeat>1.
 hassio-somfy-rts/
 ├── CLAUDE.md
 ├── README.md
-├── repository.yaml                    # HA Add-on Repository Metadaten
+├── repository.yaml                    # HA App-Repository Metadaten
 ├── cliff.toml                         # git-cliff Changelog-Konfiguration
 ├── .gitignore
 ├── .github/
 │   └── workflows/
 │       └── build.yaml                 # CI: lint bei PR, Build+Release nur bei Tags
-├── somfy-rts/                         # Das eigentliche Add-on
-│   ├── config.yaml                    # HA Add-on Schema
+├── somfy-rts/                         # Die eigentliche App
+│   ├── config.yaml                    # HA App-Schema
 │   ├── Dockerfile
 │   ├── requirements.txt               # paho-mqtt, pyserial
 │   ├── run.sh
@@ -169,7 +169,7 @@ BaseGateway (ABC)          # gateway.py
 
 ---
 
-## Add-on Konfigurationsoptionen
+## App-Konfigurationsoptionen
 
 | Option | Typ | Standard | Beschreibung |
 |---|---|---|---|
@@ -243,7 +243,7 @@ Geräte werden **nicht** in `config.yaml` verwaltet, sondern in `/data/somfy_cod
 | `cul2mqtt/gateway/status` | Verbindungstext |
 | `cul2mqtt/gateway/port` | USB-Port Pfad |
 | `cul2mqtt/gateway/device_count` | Anzahl Geräte |
-| `cul2mqtt/gateway/sw_version` | Add-on Version |
+| `cul2mqtt/gateway/sw_version` | App-Version |
 
 ---
 

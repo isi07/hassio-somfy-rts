@@ -1,10 +1,10 @@
-# Somfy RTS Add-on — Dokumentation
+# Somfy RTS App (ehemals Add-on) — Dokumentation
 
 ## Voraussetzungen
 
 - **NanoCUL USB-Stick** mit culfw-Firmware  
   **WICHTIG: 433,42 MHz — nicht 433,92 MHz!** Falsche Frequenz = Motor reagiert nicht.
-- **MQTT Broker** (z.B. das Mosquitto Add-on für Home Assistant)
+- **MQTT Broker** (z.B. die Mosquitto App für Home Assistant)
 - Home Assistant 2024.11.0 oder neuer
 - Somfy RTS kompatible Geräte (Markisen, Rollläden, Jalousien, Tore, ...)
 
@@ -13,22 +13,22 @@
 ## Installation
 
 1. Repository zu Home Assistant hinzufügen:
-   - **Einstellungen → Add-ons → Add-on Store → ⋮ → Repositories**
+   - **Einstellungen → Apps → App Store → ⋮ → Repositories**
    - URL eingeben: `https://github.com/isi07/hassio-somfy-rts`
 
-2. Add-on "Somfy RTS" installieren
+2. App "Somfy RTS" installieren
 
 3. NanoCUL USB-Stick anschließen
 
 4. Konfiguration anpassen (siehe unten)
 
-5. Add-on starten
+5. App starten
 
 ---
 
 ## Konfiguration
 
-Alle Optionen werden unter **Konfiguration** im Add-on eingestellt:
+Alle Optionen werden unter **Konfiguration** in der App eingestellt:
 
 | Option | Standard | Beschreibung |
 |--------|----------|--------------|
@@ -43,7 +43,7 @@ Alle Optionen werden unter **Konfiguration** im Add-on eingestellt:
 
 ### USB-Port ermitteln
 
-Den NanoCUL-Pfad im Add-on unter **Info → Hardware** nachschlagen,
+Den NanoCUL-Pfad in der App unter **Info → Hardware** nachschlagen,
 oder im HA Terminal: `ls /dev/ttyACM* /dev/ttyUSB*`
 
 ### Geräte
@@ -69,7 +69,7 @@ durch den Anlern-Wizard in `/data/somfy_codes.json` verwaltet.
 
 ## Gerätemodi
 
-Das Add-on unterstützt zwei Betriebsmodi pro Gerät:
+Die App unterstützt zwei Betriebsmodi pro Gerät:
 
 | Modus | HA Discovery | Verwendung |
 |-------|-------------|-----------|
@@ -97,7 +97,7 @@ Der Motor muss sich in Reichweite des NanoCUL befinden (~30 m Freifeld).
    Motor kurz auf und ab fährt (Bestätigungsbewegung).
 
 2. **Wizard in Home Assistant starten**  
-   Der Wizard ist über die Add-on Ingress-Seite erreichbar.
+   Der Wizard ist über die App-Ingress-Seite erreichbar.
    Er generiert automatisch eine eindeutige 6-stellige Hex-Adresse
    (Format: `<address_prefix><lfd. Nummer>`, z.B. `A00001`).
 
@@ -129,7 +129,7 @@ Pairing übernommen werden:
 1. Adresse und Rolling Code aus ioBroker notieren  
    (Rolling Code mit einem Sicherheitspuffer von **+10** erhöhen)
 
-2. Import via Python (einmalig im Add-on Terminal ausführen):
+2. Import via Python (einmalig im App-Terminal ausführen):
    ```python
    from somfy_rts.wizard import PairingWizard
    PairingWizard.import_from_iobroker(
@@ -140,7 +140,7 @@ Pairing übernommen werden:
    )
    ```
 
-3. Add-on neu starten — Gerät erscheint sofort in Home Assistant
+3. App neu starten — Gerät erscheint sofort in Home Assistant
 
 **Wichtig:** Der Rolling Code muss ≥ dem letzten von ioBroker verwendeten Wert sein.
 Ein zu niedriger Rolling Code bewirkt, dass der Motor alle Befehle ignoriert.
@@ -215,7 +215,7 @@ Identisch zu Markise, mit anderen Standardwerten:
 | `cul2mqtt/gateway/status` | Verbindungstext |
 | `cul2mqtt/gateway/port` | USB-Port Pfad |
 | `cul2mqtt/gateway/device_count` | Anzahl angelernte Geräte |
-| `cul2mqtt/gateway/sw_version` | Add-on Version |
+| `cul2mqtt/gateway/sw_version` | App-Version |
 
 ---
 
@@ -245,7 +245,7 @@ Die Rolling Codes werden in `/data/somfy_codes.json` gespeichert:
 
 ### NanoCUL wird nicht erkannt
 
-- USB-Gerät prüfen: **Add-on → Info → Hardware** oder im HA Terminal `ls /dev/ttyACM* /dev/ttyUSB*`
+- USB-Gerät prüfen: **App → Info → Hardware** oder im HA Terminal `ls /dev/ttyACM* /dev/ttyUSB*`
 - Anderen USB-Port versuchen
 - culfw-Firmware Version prüfen: `V` über serielle Konsole senden (Antwort: `V 1.67 CUL868...`)
 
@@ -253,11 +253,11 @@ Die Rolling Codes werden in `/data/somfy_codes.json` gespeichert:
 
 - **433,42 MHz** Firmware auf dem NanoCUL? (nicht 433,92 MHz!)
 - Entfernung zum Motor prüfen (~30 m Freifeld; Betonwände reduzieren Reichweite stark)
-- Add-on Log auf `PROG_SENT` und `CONFIRMED` prüfen (`log_level: debug` aktivieren)
+- App-Log auf `PROG_SENT` und `CONFIRMED` prüfen (`log_level: debug` aktivieren)
 
 ### MQTT Verbindung schlägt fehl
 
-- Mosquitto Add-on läuft? **Einstellungen → Add-ons → Mosquitto**
+- Mosquitto App läuft? **Einstellungen → Apps → Mosquitto**
 - `mqtt_host: core-mosquitto` für das interne HA-Netzwerk korrekt?
 - Zugangsdaten korrekt gesetzt?
 

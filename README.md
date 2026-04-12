@@ -1,8 +1,11 @@
-# Somfy RTS — Home Assistant Add-on Repository
+# Somfy RTS — Home Assistant App-Repository
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![GitHub Release](https://img.shields.io/github/v/release/isi07/hassio-somfy-rts)](https://github.com/isi07/hassio-somfy-rts/releases)
-[![Build Status](https://github.com/isi07/hassio-somfy-rts/actions/workflows/build.yaml/badge.svg)](https://github.com/isi07/hassio-somfy-rts/actions)
+![Release](https://img.shields.io/github/v/release/isi07/hassio-somfy-rts?style=for-the-badge&color=blue)
+![License](https://img.shields.io/github/license/isi07/hassio-somfy-rts?style=for-the-badge)
+![Python](https://img.shields.io/badge/Python-3.11+-yellow?style=for-the-badge&logo=python&logoColor=white)
+![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.11+-41BDF5?style=for-the-badge&logo=home-assistant&logoColor=white)
+![Build](https://img.shields.io/github/actions/workflow/status/isi07/hassio-somfy-rts/build.yaml?style=for-the-badge)
+![Arch](https://img.shields.io/badge/Arch-amd64%20%7C%20aarch64-informational?style=for-the-badge)
 
 Steuert **Somfy RTS** Geräte (Markisen, Rollläden, Jalousien) direkt aus
 Home Assistant heraus — über einen **NanoCUL USB-Stick** mit culfw-Firmware
@@ -10,10 +13,10 @@ und **MQTT**.
 
 ---
 
-## Add-ons in diesem Repository
+## Apps in diesem Repository
 
-| Add-on | Version | Beschreibung |
-|--------|---------|--------------|
+| App (ehemals Add-on) | Version | Beschreibung |
+|----------------------|---------|--------------|
 | [Somfy RTS](somfy-rts/DOCS.md) | 0.1.2 | Steuerung von Somfy RTS Geräten via NanoCUL/culfw |
 
 ---
@@ -26,13 +29,13 @@ und **MQTT**.
 
 Oder manuell:
 
-1. **Einstellungen → Add-ons → Add-on Store**
+1. **Einstellungen → Apps → App Store**
 2. Oben rechts: **⋮ → Repositories**
 3. URL eintragen: `https://github.com/isi07/hassio-somfy-rts`
 
-### Schritt 2 — Add-on installieren
+### Schritt 2 — App installieren
 
-Das Add-on "Somfy RTS" erscheint im Add-on Store unter dem neuen Repository.
+Die App "Somfy RTS" erscheint im App Store unter dem neuen Repository.
 
 ### Schritt 3 — Konfigurieren
 
@@ -82,7 +85,7 @@ Vollständige Dokumentation: [DOCS.md](somfy-rts/DOCS.md)
 Home Assistant
      │
      ▼
- Somfy RTS Add-on (Docker)
+ Somfy RTS App (Docker)
      │           │
      ▼           ▼
  NanoCUL      MQTT Broker
