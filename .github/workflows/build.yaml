@@ -73,6 +73,16 @@ jobs:
           python -m json.tool somfy-rts/somfy_rts/device_profiles.json > /dev/null
           echo "JSON valid"
 
+      - name: Validate HA Add-on config
+        uses: frenck/action-addon-linter@v2
+        with:
+          path: "./somfy-rts"
+
+      - name: Lint GitHub Actions workflow
+        run: |
+          bash <(curl -s https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint .github/workflows/build.yaml
+
   build:
     name: Build & push multi-arch image
     runs-on: ubuntu-latest
