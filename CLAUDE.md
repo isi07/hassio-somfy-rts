@@ -314,6 +314,66 @@ zugehörige Code.
 
 ---
 
+## Code-Qualitätsstandards
+
+### Type Hints
+
+Alle Funktionen und Methoden müssen vollständige Type Hints haben:
+
+```python
+# Falsch:
+def send(address, code, cmd):
+    ...
+
+# Richtig:
+def send(address: str, rolling_code: int, cmd: str) -> bool:
+    ...
+```
+
+- Parameter mit Typen annotieren
+- Rückgabewert mit `->` annotieren
+- `-> None` explizit angeben wenn nichts zurückgegeben wird
+- Komplexe Typen aus `typing` importieren: `Optional`, `List`, `Dict`, `Tuple`, `Union`
+
+### Docstrings
+
+Jede Klasse und jede öffentliche Methode braucht einen Docstring (Google Style):
+
+```python
+def send_prog(self, address: str) -> bool:
+    """Send PROG command to enter pairing mode.
+
+    Args:
+        address: 6-char hex address e.g. 'A00000'
+
+    Returns:
+        True if command was sent successfully
+    """
+```
+
+### Ruff Regeln (bereits in build.yaml)
+
+| Selector | Bedeutung |
+|----------|-----------|
+| `E` | pycodestyle Fehler (Pflicht) |
+| `F` | pyflakes — unused imports, undefined names (Pflicht) |
+| `I` | isort — Import-Reihenfolge |
+| `UP` | pyupgrade — moderne Python-Syntax |
+
+### Allgemein
+
+- **Keine Magic Numbers:** Konstanten definieren — `BAUDRATE = 9600` statt direkt `9600`
+- **Maximale Zeilenlänge:** 88 Zeichen (ruff default)
+- **Kein `print()`:** immer `logging` verwenden
+- **Spezifische Exceptions:** `except serial.SerialException` statt `except Exception`
+
+### Bestehender Code
+
+Bei Änderungen an bestehenden Dateien: Type Hints und Docstrings nur für
+**geänderte Funktionen** ergänzen — nicht die ganze Datei auf einmal umschreiben.
+
+---
+
 ## Entwicklungs-Hinweise
 
 - Lokaler Test: `OPTIONS_PATH=./test_options.json SOMFY_CODES_PATH=./test_codes.json python -m somfy_rts.main`
