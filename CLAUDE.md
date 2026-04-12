@@ -293,9 +293,29 @@ Rolling Code muss ≥ letzter ioBroker-Wert sein (Sicherheitsmarge +10 empfohlen
 
 ---
 
+## Dokumentationspflicht
+
+Bei **jeder** Änderung am Code müssen folgende Dateien geprüft und falls nötig
+aktualisiert werden:
+
+- **CLAUDE.md** — bei Änderungen an Dateistruktur, Modulnamen,
+  Konfigurationsfeldern, Workflows
+- **somfy-rts/DOCS.md** — bei Änderungen an `config.yaml`-Optionen,
+  neuen Features, Anlern-Prozess, Blueprints
+- **README.md** — bei neuen Features oder geänderten Installationsschritten
+- **somfy-rts/CHANGELOG.md** — wird automatisch via git-cliff generiert,
+  **NICHT manuell bearbeiten**
+
+**Commit-Regel:** Dokumentationsänderungen immer im **gleichen Commit** wie der
+zugehörige Code.
+
+- Falsch: `feat: add travel time tracking` gefolgt von `docs: update readme`
+- Richtig: `feat: add travel time tracking` enthält bereits die aktualisierten Docs
+
+---
+
 ## Entwicklungs-Hinweise
 
 - Lokaler Test: `OPTIONS_PATH=./test_options.json SOMFY_CODES_PATH=./test_codes.json python -m somfy_rts.main`
 - culfw antwortet auf `V\n` mit Versions-String
-- `cul.py` ist ein Shim → immer `gateway.py` direkt importieren
 - Rolling Code Datei NIE manuell löschen → Neu-Pairing nötig
