@@ -244,20 +244,21 @@ devices:
 
 ## Blueprints (HA 2024.11+)
 
-### `somfy_markise.yaml` — `domain: template`
+### `blueprints/template/somfy_rts_awning.yaml` — `domain: template`
 
-Erstellt ein Template Cover mit:
+Erstellt ein Template Cover für Markisen:
 - Fensterkontakt-Priorität (Schließen blockiert wenn Fenster offen)
 - Fahrzeit-Schätzung via Timer (time_pattern `/1s` nur wenn Timer aktiv)
 - Inputs: somfy_cover_entity, device_class, contact_sensor, contact_closed_state,
-  use_travel_time, travel_timer, travel_time_open (5–300s), travel_time_close (5–300s)
+  use_travel_time, travel_timer, travel_time_open (default 35s), travel_time_close (default 38s)
 
-### `somfy_rollladen.yaml` — `domain: automation`
+### `blueprints/template/somfy_rts_shutter.yaml` — `domain: template`
 
-Automatisierung mit:
-- Sonnenaufgang/Sonnenuntergang (jeweils mit Minuten-Versatz)
-- Anwesenheits-Prüfung optional
-- Benachrichtigung optional
+Erstellt ein Template Cover für Rollläden:
+- Identische Struktur wie somfy_rts_awning.yaml
+- device_class: shutter (default)
+- travel_time_open default: 40s, travel_time_close default: 43s
+- Labels: "Hochfahren"/"Runterfahren"
 
 ---
 
