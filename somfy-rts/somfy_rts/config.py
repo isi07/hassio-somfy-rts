@@ -42,6 +42,7 @@ class Config:
     mqtt_user: str = ""
     mqtt_password: str = ""
     log_level: str = "INFO"
+    address_prefix: str = "A000"  # single source of truth — passed to PairingWizard
 
 
 def load_config() -> Config:
@@ -54,4 +55,5 @@ def load_config() -> Config:
         mqtt_user=os.environ.get("SOMFY_MQTT_USER", ""),
         mqtt_password=os.environ.get("SOMFY_MQTT_PASSWORD", ""),
         log_level=os.environ.get("SOMFY_LOG_LEVEL", "info").upper(),
+        address_prefix=os.environ.get("SOMFY_ADDRESS_PREFIX", "A000").upper(),
     )

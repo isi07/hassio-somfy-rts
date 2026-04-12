@@ -70,8 +70,9 @@ class PairingWizard:
         cfg = wizard.get_device_config()
     """
 
-    def __init__(self, gateway: BaseGateway):
+    def __init__(self, gateway: BaseGateway, address_prefix: str = "A000"):
         self._gateway = gateway
+        self._address_prefix = address_prefix.upper()
         self._session = WizardSession()
 
     # ---------- Step 1 / 2: Start & address generation ----------
@@ -221,10 +222,11 @@ class PairingWizard:
     # ---------- Internal ----------
 
     def _next_address(self, name: str) -> str:
-        """Generate next address: <prefix_4hex><sequence_2hex>."""
+        """Generate next address: <prefix_4hex><sequence_2hex>.
+        Prefix comes from config (SOMFY_ADDRESS_PREFIX), not from somfy_codes.json.
+        """
         store = _load()
-        settings = store.get("settings", {})
-        prefix = settings.get("address_prefix", "A000").upper()
+        prefix = self._address_prefix
         devices = store.get("devices", [])
 
         # Sequence = number of existing devices + 1, capped at 0xFF
@@ -237,7 +239,8 @@ class PairingWizard:
             sequence = (sequence + 1) & 0xFF
             address = f"{prefix}{sequence:02X}"
 
-        # Lock prefix after first device is added
+        # Lock prefix in somfy_codes.json after first device is added
+        settings = store.get("settings", {})
         if not settings.get("prefix_locked", False):
             set_address_prefix(prefix, lock=True)
 

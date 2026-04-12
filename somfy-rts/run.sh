@@ -27,6 +27,7 @@ fi
 
 # ---------- Export config as environment variables for Python ----------
 export SOMFY_USB_PORT="${USB_PORT}"
+export SOMFY_ADDRESS_PREFIX="${ADDRESS_PREFIX}"
 export SOMFY_BAUDRATE="${BAUDRATE}"
 export SOMFY_MQTT_HOST="${MQTT_HOST}"
 export SOMFY_MQTT_PORT="${MQTT_PORT}"
