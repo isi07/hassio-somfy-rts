@@ -49,7 +49,7 @@ _GW_DEVICE = {
 class MQTTClient:
     """Verwaltet MQTT-Verbindung, HA Discovery und Command-Dispatch."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config) -> None:
         self._config = config
         self._client = mqtt.Client(client_id="somfy_rts_addon", clean_session=True)
         self._handlers: Dict[str, Callable[[str], None]] = {}
@@ -263,7 +263,7 @@ class MQTTClient:
         self._client.subscribe(topic)
         self._handlers[topic] = handler
 
-    def _on_connect(self, client, userdata, flags, rc):
+    def _on_connect(self, client: mqtt.Client, userdata: object, flags: dict, rc: int) -> None:
         if rc == 0:
             logger.info("MQTT verbunden.")
             client.publish(LWT_TOPIC, "online", retain=True)
@@ -272,11 +272,11 @@ class MQTTClient:
         else:
             logger.error("MQTT Verbindungsfehler, RC=%d", rc)
 
-    def _on_disconnect(self, client, userdata, rc):
+    def _on_disconnect(self, client: mqtt.Client, userdata: object, rc: int) -> None:
         if rc != 0:
             logger.warning("MQTT getrennt (RC=%d) — paho reconnect...", rc)
 
-    def _on_message(self, client, userdata, msg):
+    def _on_message(self, client: mqtt.Client, userdata: object, msg: mqtt.MQTTMessage) -> None:
         topic = msg.topic
         payload = msg.payload.decode("utf-8", errors="replace").strip()
         logger.debug("MQTT RX [%s]: %s", topic, payload)

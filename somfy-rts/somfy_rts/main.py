@@ -3,6 +3,7 @@
 import logging
 import signal
 import sys
+import types
 import time
 
 from . import __version__
@@ -35,7 +36,7 @@ def main() -> None:
 
     running = True
 
-    def _shutdown(signum, frame):
+    def _shutdown(signum: int, frame: types.FrameType | None) -> None:
         nonlocal running
         logger.info("Signal %d received — shutting down...", signum)
         running = False

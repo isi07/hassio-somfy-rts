@@ -69,7 +69,7 @@ class PairingWizard:
         cfg = wizard.get_device_config()
     """
 
-    def __init__(self, gateway: BaseGateway, address_prefix: str = "A000"):
+    def __init__(self, gateway: BaseGateway, address_prefix: str = "A000") -> None:
         self._gateway = gateway
         self._address_prefix = address_prefix.upper()
         self._session = WizardSession()

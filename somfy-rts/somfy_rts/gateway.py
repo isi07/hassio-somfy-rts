@@ -53,7 +53,7 @@ class CULGateway(BaseGateway):
     wir senden nur Roh-Strings, culfw übernimmt Checksumme und Verschlüsselung.
     """
 
-    def __init__(self, port: str, baud_rate: int = 9600):
+    def __init__(self, port: str, baud_rate: int = 9600) -> None:
         self._port = port
         self._baud_rate = baud_rate
         self._serial: Optional[serial.Serial] = None

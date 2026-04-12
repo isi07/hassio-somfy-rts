@@ -51,7 +51,7 @@ class Device:
     Modus B: Empfängt Button-Press-Events, sendet RTS, aktualisiert Diagnose-Sensoren.
     """
 
-    def __init__(self, device_cfg: DeviceConfig, gateway: BaseGateway, mqtt: MQTTClient):
+    def __init__(self, device_cfg: DeviceConfig, gateway: BaseGateway, mqtt: MQTTClient) -> None:
         self._device = device_cfg
         self._gateway = gateway
         self._mqtt = mqtt
