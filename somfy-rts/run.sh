@@ -1,4 +1,5 @@
 #!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
 
 bashio::log.info "Starting Somfy RTS Add-on..."
 
@@ -39,5 +40,5 @@ export SOMFY_CODES_PATH="/data/somfy_codes.json"
 bashio::log.info "USB: ${USB_PORT} | MQTT: ${MQTT_HOST}:${MQTT_PORT} | Log: ${LOG_LEVEL}"
 
 # ---------- Start Python application ----------
-cd /app
+cd /app || exit 1
 exec python3 -m somfy_rts.main
