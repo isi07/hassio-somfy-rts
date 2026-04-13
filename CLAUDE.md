@@ -374,6 +374,21 @@ Bei Änderungen an bestehenden Dateien: Type Hints und Docstrings nur für
 
 ---
 
+## Release-Prozess (IMMER in dieser Reihenfolge)
+
+1. version in `somfy-rts/config.yaml` auf neue Version setzen
+2. `git cliff --unreleased --tag vX.Y.Z -o somfy-rts/CHANGELOG.md`
+3. `git add -A`
+4. `git commit -m "chore: release X.Y.Z"`
+5. `git tag vX.Y.Z`
+6. `git push origin main`
+7. `git push origin vX.Y.Z`
+
+**NIEMALS** einen Tag setzen ohne vorher die Version in `config.yaml` aktualisiert zu haben.
+Tag und `config.yaml` version müssen **IMMER** übereinstimmen.
+
+---
+
 ## Entwicklungs-Hinweise
 
 - Lokaler Test: `OPTIONS_PATH=./test_options.json SOMFY_CODES_PATH=./test_codes.json python -m somfy_rts.main`
