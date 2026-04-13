@@ -123,19 +123,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Debug workspace
-        run: |
-          echo "PWD: $(pwd)"
-          echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
-          ls -la "$GITHUB_WORKSPACE/"
-          ls -la "$GITHUB_WORKSPACE/somfy-rts/"
-
       - name: Build and push
         uses: home-assistant/builder@2025.03.0
         with:
           args: |
             --${{ matrix.arch }}
-            --target somfy-rts
+            --target /data/somfy-rts
             --image somfy-rts
             --docker-hub ghcr.io/isi07
             --addon
