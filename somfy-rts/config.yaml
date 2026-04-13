@@ -50,4 +50,4 @@ schema:
   simulation_mode: bool
   file_logging: bool
 
-image: "ghcr.io/isi07/hassio-somfy-rts/somfy-rts"
+image: "ghcr.io/isi07/somfy-rts"
