@@ -101,9 +101,9 @@ jobs:
           ./actionlint .github/workflows/build.yaml
 
   build:
-    name: "Build & push image (${{ matrix.arch }})"
-    runs-on: ubuntu-latest
+    name: "Build ${{ matrix.arch }}"
     needs: lint
+    runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
@@ -116,6 +116,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Get version from config.yaml
+        id: version
+        run: |
+          echo "version=$(grep '^version:' somfy-rts/config.yaml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
+
       - name: Login to ghcr.io
         uses: docker/login-action@v4
         with:
@@ -123,20 +128,60 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and push
-        uses: home-assistant/builder@2025.03.0
+        uses: docker/build-push-action@v6
         with:
-          args: |
-            --${{ matrix.arch }}
-            --target /data/somfy-rts
-            --image somfy-rts
-            --docker-hub ghcr.io/isi07
-            --addon
+          context: somfy-rts
+          file: somfy-rts/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          push: true
+          tags: ghcr.io/isi07/somfy-rts:${{ steps.version.outputs.version }}-${{ matrix.arch }}
+          build-args: |
+            BUILD_FROM=ghcr.io/home-assistant/${{ matrix.arch }}-base-python:3.11
+
+  manifest:
+    name: Create multi-arch manifest
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version from config.yaml
+        id: version
+        run: |
+          echo "version=$(grep '^version:' somfy-rts/config.yaml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
+
+      - name: Login to ghcr.io
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push manifest
+        run: |
+          docker buildx imagetools create \
+            -t ghcr.io/isi07/somfy-rts:${{ steps.version.outputs.version }} \
+            -t ghcr.io/isi07/somfy-rts:latest \
+            ghcr.io/isi07/somfy-rts:${{ steps.version.outputs.version }}-amd64 \
+            ghcr.io/isi07/somfy-rts:${{ steps.version.outputs.version }}-aarch64
 
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: build
+    needs: manifest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
