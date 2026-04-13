@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Somfy RTS – Gerät anlernen</title>
+<link rel="stylesheet" href="./static/style.css">
+</head>
+<body>
+
+<header>
+  <h1>Somfy <span>RTS</span></h1>
+  <span id="status-badge" class="badge warn">Verbinde…</span>
+</header>
+
+<nav>
+  <a href="./">Geräte</a>
+  <a href="./wizard" class="active">Anlern</a>
+  <a href="./settings">Einstellungen</a>
+  <a href="./logs">Log</a>
+</nav>
+
+<main>
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Gerät anlernen</div>
+        <div class="card-subtitle">5-Schritt Pairing-Wizard</div>
+      </div>
+    </div>
+
+    <!-- Step indicator -->
+    <div class="steps" id="step-indicator">
+      <div class="step active" data-step="1"><div class="num">1</div><span>Typ &amp; Name</span></div>
+      <div class="step-line"></div>
+      <div class="step" data-step="2"><div class="num">2</div><span>Adresse</span></div>
+      <div class="step-line"></div>
+      <div class="step" data-step="3"><div class="num">3</div><span>Motor</span></div>
+      <div class="step-line"></div>
+      <div class="step" data-step="4"><div class="num">4</div><span>PROG</span></div>
+      <div class="step-line"></div>
+      <div class="step" data-step="5"><div class="num">5</div><span>Fertig</span></div>
+    </div>
+
+    <!-- Step 1: Name + Type -->
+    <div class="step-panel active" id="panel-1">
+      <div class="form-group">
+        <label for="dev-name">Gerätename</label>
+        <input type="text" id="dev-name" placeholder="z. B. Wohnzimmer Markise" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label for="dev-type">Gerätetyp</label>
+        <select id="dev-type">
+          <option value="awning">Markise</option>
+          <option value="shutter" selected>Rollladen</option>
+          <option value="blind">Jalousie / Raffstore</option>
+          <option value="screen">Insektenschutzrollo</option>
+          <option value="gate">Garagentor / Einfahrtstor</option>
+          <option value="light">Somfy-Licht</option>
+          <option value="heater">Heizung</option>
+        </select>
+      </div>
+      <div id="step1-err" class="alert alert-err hidden"></div>
+      <div class="flex gap mt-lg">
+        <button class="btn btn-primary w-full" id="btn-start">Weiter →</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Address generated -->
+    <div class="step-panel" id="panel-2">
+      <p class="text-dim text-sm">Eine eindeutige Adresse wurde generiert:</p>
+      <div class="addr-display" id="gen-address">–</div>
+      <div class="instruction-box">
+        <strong>Jetzt den Motor in den Anlernmodus versetzen:</strong>
+        <ol>
+          <li>Die <strong>PROG-Taste</strong> der <strong>Original-Fernbedienung</strong> ca. <strong>3 Sekunden</strong> halten.</li>
+          <li>Der Motor fährt kurz <strong>auf und ab</strong> — das ist die Bestätigungsbewegung.</li>
+          <li>Danach auf <em>Weiter</em> klicken (innerhalb von 2 Minuten!).</li>
+        </ol>
+      </div>
+      <div class="flex gap mt-lg">
+        <button class="btn btn-secondary" id="btn-back2">← Zurück</button>
+        <button class="btn btn-primary" id="btn-motor-ready">Motor bereit →</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Send PROG -->
+    <div class="step-panel" id="panel-3">
+      <div class="instruction-box">
+        <strong>PROG-Telegramm wird gesendet…</strong><br>
+        Der NanoCUL sendet das Anlern-Signal an den Motor.
+        Der Motor bestätigt mit einer kurzen Auf-Ab-Bewegung.
+      </div>
+      <div id="prog-status" class="text-center mt" style="min-height:2rem"></div>
+      <div id="step3-err" class="alert alert-err hidden mt"></div>
+      <div class="flex gap mt-lg">
+        <button class="btn btn-secondary" id="btn-back3">← Zurück</button>
+        <button class="btn btn-primary" id="btn-send-prog">PROG senden ▶</button>
+      </div>
+    </div>
+
+    <!-- Step 4: Confirm -->
+    <div class="step-panel" id="panel-4">
+      <div class="instruction-box">
+        <strong>Hat der Motor mit einer Auf-Ab-Bewegung bestätigt?</strong><br>
+        Wenn ja: auf <em>Bestätigen</em> klicken.
+        Wenn nicht: auf <em>Wiederholen</em> klicken.
+      </div>
+      <div id="step4-err" class="alert alert-err hidden mt"></div>
+      <div class="flex gap mt-lg">
+        <button class="btn btn-secondary" id="btn-retry">↺ Wiederholen</button>
+        <button class="btn btn-primary" id="btn-confirm">✓ Bestätigen</button>
+      </div>
+    </div>
+
+    <!-- Step 5: Done / Error -->
+    <div class="step-panel" id="panel-5">
+      <div class="result-box" id="result-ok" class="hidden">
+        <div class="icon">✅</div>
+        <div class="title text-ok">Gerät erfolgreich angelernt!</div>
+        <div class="text-dim text-sm mt" id="result-device-info"></div>
+        <div class="flex gap mt-lg" style="justify-content:center">
+          <a href="./" class="btn btn-primary">→ Zur Geräteliste</a>
+          <button class="btn btn-secondary" id="btn-new">Weiteres Gerät</button>
+        </div>
+      </div>
+      <div class="result-box" id="result-err" class="hidden">
+        <div class="icon">❌</div>
+        <div class="title text-err">Anlernvorgang fehlgeschlagen</div>
+        <div class="text-dim text-sm mt" id="result-err-msg"></div>
+        <div class="flex gap mt-lg" style="justify-content:center">
+          <button class="btn btn-secondary" id="btn-cancel">Abbrechen</button>
+          <button class="btn btn-primary" id="btn-retry2">↺ Neu starten</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+let currentStep = 1;
+let generatedAddr = "";
+
+async function apiFetch(path, opts) {
+  const r = await fetch("." + path, opts);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.message || r.status);
+  return data;
+}
+
+async function updateStatus() {
+  try {
+    const s = await apiFetch("/api/status");
+    const b = document.getElementById("status-badge");
+    if (s.simulation)   { b.className = "badge sim"; b.textContent = "Simulation"; }
+    else if (s.connected){ b.className = "badge ok";  b.textContent = "Verbunden"; }
+    else                 { b.className = "badge err"; b.textContent = "Getrennt"; }
+  } catch {}
+}
+
+function showStep(n) {
+  currentStep = n;
+  document.querySelectorAll(".step-panel").forEach(p => p.classList.remove("active"));
+  document.getElementById("panel-" + n).classList.add("active");
+  // Update step indicator
+  document.querySelectorAll(".step[data-step]").forEach(s => {
+    const sn = parseInt(s.dataset.step);
+    s.classList.remove("active", "done");
+    if (sn < n) s.classList.add("done");
+    else if (sn === n) s.classList.add("active");
+  });
+  document.querySelectorAll(".step-line").forEach((l, i) => {
+    l.classList.toggle("done", i < n - 1);
+  });
+}
+
+function showErr(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.classList.remove("hidden");
+}
+function hideErr(id) { document.getElementById(id).classList.add("hidden"); }
+
+// Step 1 → Start wizard
+document.getElementById("btn-start").addEventListener("click", async () => {
+  const name = document.getElementById("dev-name").value.trim();
+  const type = document.getElementById("dev-type").value;
+  hideErr("step1-err");
+  if (!name) { showErr("step1-err", "Bitte einen Namen eingeben."); return; }
+  try {
+    const data = await apiFetch("/api/wizard/start", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({name, device_type: type})
+    });
+    generatedAddr = data.address;
+    document.getElementById("gen-address").textContent = generatedAddr;
+    showStep(2);
+  } catch(e) { showErr("step1-err", "Fehler: " + e.message); }
+});
+
+// Step 2 → Motor ready
+document.getElementById("btn-motor-ready").addEventListener("click", () => showStep(3));
+document.getElementById("btn-back2").addEventListener("click", async () => {
+  await apiFetch("/api/wizard/cancel", {method:"POST"});
+  showStep(1);
+});
+
+// Step 3 → Send PROG
+document.getElementById("btn-send-prog").addEventListener("click", async () => {
+  hideErr("step3-err");
+  const btn = document.getElementById("btn-send-prog");
+  btn.disabled = true;
+  document.getElementById("prog-status").innerHTML = '<span class="spinner"></span> Sende PROG…';
+  try {
+    await apiFetch("/api/wizard/send_prog", {method:"POST"});
+    document.getElementById("prog-status").innerHTML = '<span class="text-ok">✓ PROG gesendet — warte auf Motor-Bestätigung</span>';
+    setTimeout(() => showStep(4), 1200);
+  } catch(e) {
+    document.getElementById("prog-status").innerHTML = "";
+    showErr("step3-err", "Sendefehler: " + e.message);
+    btn.disabled = false;
+  }
+});
+document.getElementById("btn-back3").addEventListener("click", () => showStep(2));
+
+// Step 4 → Confirm
+document.getElementById("btn-confirm").addEventListener("click", async () => {
+  hideErr("step4-err");
+  try {
+    const data = await apiFetch("/api/wizard/confirm", {method:"POST"});
+    document.getElementById("result-ok").classList.remove("hidden");
+    document.getElementById("result-err").classList.add("hidden");
+    document.getElementById("result-device-info").textContent =
+      `${data.device.name} | Adresse: ${data.device.address} | Typ: ${data.device.type}`;
+    showStep(5);
+  } catch(e) {
+    showErr("step4-err", "Fehler: " + e.message);
+  }
+});
+
+document.getElementById("btn-retry").addEventListener("click", async () => {
+  // Go back to send PROG again
+  document.getElementById("prog-status").innerHTML = "";
+  document.getElementById("btn-send-prog").disabled = false;
+  hideErr("step3-err");
+  showStep(3);
+});
+
+// Step 5 → New or cancel
+document.getElementById("btn-new").addEventListener("click", () => {
+  document.getElementById("dev-name").value = "";
+  showStep(1);
+});
+document.getElementById("btn-cancel").addEventListener("click", async () => {
+  await apiFetch("/api/wizard/cancel", {method:"POST"}).catch(() => {});
+  document.getElementById("dev-name").value = "";
+  showStep(1);
+});
+document.getElementById("btn-retry2").addEventListener("click", () => {
+  document.getElementById("dev-name").value = "";
+  showStep(1);
+});
+
+updateStatus();
+</script>
+</body>
+</html>

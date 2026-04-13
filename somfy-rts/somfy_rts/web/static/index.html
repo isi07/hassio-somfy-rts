@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Somfy RTS</title>
+<link rel="stylesheet" href="./static/style.css">
+</head>
+<body>
+
+<header>
+  <h1>Somfy <span>RTS</span></h1>
+  <span id="status-badge" class="badge warn">Verbinde…</span>
+</header>
+
+<nav>
+  <a href="./"         class="active">Geräte</a>
+  <a href="./wizard">Anlern</a>
+  <a href="./settings">Einstellungen</a>
+  <a href="./logs">Log</a>
+</nav>
+
+<main>
+  <div id="loading" class="empty-state">
+    <div class="spinner"></div>
+    <p class="mt text-dim">Lade Geräte…</p>
+  </div>
+
+  <div id="empty-state" class="empty-state hidden">
+    <div class="icon">🎛️</div>
+    <p>Noch kein Gerät angelernt.</p>
+    <a href="./wizard" class="btn btn-primary">Gerät anlernen</a>
+  </div>
+
+  <div id="device-grid" class="device-grid hidden"></div>
+</main>
+
+<script>
+const TYPE_LABEL = {
+  awning:"Markise", shutter:"Rollladen", blind:"Jalousie",
+  screen:"Rollo", gate:"Tor", light:"Licht", heater:"Heizung"
+};
+const CMD_LABELS = {
+  awning: {up:"Ausfahren", dn:"Einfahren"},
+  shutter:{up:"Hochfahren",dn:"Runterfahren"},
+  blind:  {up:"Öffnen",   dn:"Schließen"},
+  screen: {up:"Hochfahren",dn:"Runterfahren"},
+  gate:   {up:"Öffnen",   dn:"Schließen"},
+  light:  {up:"Ein",      dn:"Aus"},
+  heater: {up:"Ein",      dn:"Aus"},
+};
+
+async function apiFetch(path, opts) {
+  const r = await fetch("." + path, opts);
+  if (!r.ok) { const t = await r.text(); throw new Error(t || r.status); }
+  return r.json();
+}
+
+async function updateStatus() {
+  try {
+    const s = await apiFetch("/api/status");
+    const b = document.getElementById("status-badge");
+    if (s.simulation) {
+      b.className = "badge sim"; b.textContent = "Simulation";
+    } else if (s.connected) {
+      b.className = "badge ok"; b.textContent = "Verbunden";
+    } else {
+      b.className = "badge err"; b.textContent = "Getrennt";
+    }
+  } catch {}
+}
+
+async function sendCmd(addr, action, btn) {
+  btn.disabled = true;
+  try {
+    await apiFetch("/api/devices/" + addr + "/cmd", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({action})
+    });
+  } catch(e) { alert("Fehler: " + e.message); }
+  finally { btn.disabled = false; }
+}
+
+function renderDevice(d) {
+  const type = d.device_type || d.type || "shutter";
+  const lbl = CMD_LABELS[type] || {up:"Auf", dn:"Ab"};
+  const el = document.createElement("div");
+  el.className = "device-card";
+  el.innerHTML = `
+    <div class="device-name">${escHtml(d.name)}</div>
+    <div class="device-meta">
+      <span class="device-type">${TYPE_LABEL[type]||type}</span>
+      <span class="device-addr">${d.address}</span>
+    </div>
+    <div class="cmd-row">
+      <button class="btn btn-up"   data-action="OPEN">▲ ${escHtml(lbl.up)}</button>
+      <button class="btn btn-stop" data-action="STOP">■ STOP</button>
+      <button class="btn btn-dn"   data-action="CLOSE">▼ ${escHtml(lbl.dn)}</button>
+    </div>
+    <div class="cmd-row mt">
+      <button class="btn btn-my" data-action="MY_UP">MY ▲</button>
+      <button class="btn btn-my" data-action="MY_DOWN">MY ▼</button>
+    </div>
+    <div class="device-rc">RC: <span class="mono">${d.rolling_code}</span></div>
+  `;
+  el.querySelectorAll("button[data-action]").forEach(btn => {
+    btn.addEventListener("click", () => sendCmd(d.address, btn.dataset.action, btn));
+  });
+  return el;
+}
+
+function escHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
+}
+
+async function loadDevices() {
+  const loading = document.getElementById("loading");
+  const empty   = document.getElementById("empty-state");
+  const grid    = document.getElementById("device-grid");
+  try {
+    const data = await apiFetch("/api/devices");
+    loading.classList.add("hidden");
+    if (!data.devices || data.devices.length === 0) {
+      empty.classList.remove("hidden");
+    } else {
+      grid.innerHTML = "";
+      data.devices.forEach(d => grid.appendChild(renderDevice(d)));
+      grid.classList.remove("hidden");
+    }
+  } catch(e) {
+    loading.innerHTML = `<p class="text-err">Fehler: ${e.message}</p>`;
+  }
+}
+
+updateStatus();
+loadDevices();
+setInterval(updateStatus, 10000);
+setInterval(loadDevices, 30000);
+</script>
+</body>
+</html>

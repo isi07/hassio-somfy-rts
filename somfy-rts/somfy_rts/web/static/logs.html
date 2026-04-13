@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Somfy RTS – Log</title>
+<link rel="stylesheet" href="./static/style.css">
+</head>
+<body>
+
+<header>
+  <h1>Somfy <span>RTS</span></h1>
+  <span id="status-badge" class="badge warn">Verbinde…</span>
+</header>
+
+<nav>
+  <a href="./">Geräte</a>
+  <a href="./wizard">Anlern</a>
+  <a href="./settings">Einstellungen</a>
+  <a href="./logs" class="active">Log</a>
+</nav>
+
+<main>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">RTS Frame Log</div>
+      <span id="entry-count" class="text-dim text-sm">–</span>
+    </div>
+
+    <div class="filter-bar">
+      <input type="text" id="filter-dev"  placeholder="Filter Gerät…">
+      <input type="text" id="filter-cmd"  placeholder="Filter Befehl…">
+      <button class="btn btn-secondary" id="btn-refresh">↺ Aktualisieren</button>
+    </div>
+
+    <div class="toggle-row">
+      <input type="checkbox" id="json-toggle">
+      <label for="json-toggle">Rohe Nachrichten anzeigen</label>
+      <span class="text-dim text-sm" style="margin-left:auto" id="refresh-info">Auto-Refresh 5s</span>
+    </div>
+
+    <div id="no-entries" class="empty-state hidden">
+      <div class="icon">📋</div>
+      <p>Noch keine RTS-Frames protokolliert.<br>
+      Sende einen Befehl über die Geräteliste.</p>
+    </div>
+
+    <!-- Table view -->
+    <div id="table-view" class="table-wrap hidden">
+      <table>
+        <thead>
+          <tr>
+            <th>Zeit</th>
+            <th>Gerät</th>
+            <th>Befehl</th>
+            <th>RC (Post)</th>
+            <th>Frame</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="log-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Raw view -->
+    <div id="raw-view" class="hidden">
+      <pre id="raw-pre" style="font-family:var(--mono);font-size:.78rem;color:var(--text-dim);
+           background:var(--surface2);padding:.75rem;border-radius:var(--radius);
+           overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:400px;
+           overflow-y:auto"></pre>
+    </div>
+  </div>
+</main>
+
+<script>
+let allEntries = [];
+let jsonMode = false;
+
+async function apiFetch(path) {
+  const r = await fetch("." + path);
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+async function updateStatus() {
+  try {
+    const s = await apiFetch("/api/status");
+    const b = document.getElementById("status-badge");
+    if (s.simulation)    { b.className="badge sim"; b.textContent="Simulation"; }
+    else if (s.connected){ b.className="badge ok";  b.textContent="Verbunden"; }
+    else                 { b.className="badge err"; b.textContent="Getrennt"; }
+  } catch {}
+}
+
+function escHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
+}
+
+function parseEntry(entry) {
+  const msg = entry.message || "";
+  // Try JSON
+  if (msg.trim().startsWith("{")) {
+    try { return JSON.parse(msg); } catch {}
+  }
+  // Parse text format: "... CMD=OPEN    DEV=A00001 RC_PRE=0000 RC_POST=0001 FRAME=... STATUS=OK"
+  const p = (key) => { const m = msg.match(new RegExp(key + "=(\\S+)")); return m ? m[1] : ""; };
+  return {
+    timestamp: new Date(entry.ts * 1000).toISOString(),
+    command:   p("CMD").replace(/\s+/g,""),
+    device_id: p("DEV"),
+    rolling_code_after: parseInt(p("RC_POST"), 16) || "",
+    frame_raw: p("FRAME"),
+    status:    p("STATUS"),
+    event:     p("EVENT") || null,
+    _raw: msg,
+  };
+}
+
+function formatTime(ts) {
+  if (!ts) return "–";
+  const d = typeof ts === "number" ? new Date(ts * 1000) : new Date(ts);
+  return d.toLocaleTimeString("de-DE", {hour12:false}) + "." + String(d.getMilliseconds()).padStart(3,"0");
+}
+
+function applyFilter() {
+  const fdev = document.getElementById("filter-dev").value.toLowerCase();
+  const fcmd = document.getElementById("filter-cmd").value.toLowerCase();
+  return allEntries.filter(e => {
+    const p = parseEntry(e);
+    const dev = (p.device_id || "").toLowerCase();
+    const cmd = (p.command || p.event || "").toLowerCase();
+    return (!fdev || dev.includes(fdev)) && (!fcmd || cmd.includes(fcmd));
+  });
+}
+
+function renderTable(entries) {
+  const tbody = document.getElementById("log-tbody");
+  tbody.innerHTML = "";
+  [...entries].reverse().forEach(entry => {
+    const p = parseEntry(entry);
+    if (p.event && p.event !== "null") {
+      // Lifecycle events (GATEWAY_CONNECT etc.)
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="mono">${formatTime(entry.ts)}</td>
+        <td colspan="3" class="text-dim">${escHtml(p.event||"")}</td>
+        <td colspan="2" class="mono text-dim">${escHtml(p.port||"")}</td>
+      `;
+      tbody.appendChild(tr);
+      return;
+    }
+    const ok = (p.status||"") === "OK";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="mono">${formatTime(entry.ts)}</td>
+      <td class="mono text-accent">${escHtml(p.device_id||"")}</td>
+      <td><strong>${escHtml(p.command||"")}</strong></td>
+      <td class="mono">${p.rolling_code_after !== "" ? "0x" + String(Number(p.rolling_code_after)).toString(16).toUpperCase().padStart(4,"0") : "–"}</td>
+      <td class="mono" style="font-size:.75rem">${escHtml(p.frame_raw||"")}</td>
+      <td class="${ok?"status-ok":"status-err"}">${escHtml(p.status||"")}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderRaw(entries) {
+  document.getElementById("raw-pre").textContent =
+    [...entries].reverse().map(e => e.message).join("\n");
+}
+
+function render() {
+  const filtered = applyFilter();
+  const noEnt = document.getElementById("no-entries");
+  const tbl = document.getElementById("table-view");
+  const raw = document.getElementById("raw-view");
+  document.getElementById("entry-count").textContent = filtered.length + " Einträge";
+
+  if (filtered.length === 0) {
+    noEnt.classList.remove("hidden");
+    tbl.classList.add("hidden");
+    raw.classList.add("hidden");
+    return;
+  }
+  noEnt.classList.add("hidden");
+
+  if (jsonMode) {
+    tbl.classList.add("hidden");
+    raw.classList.remove("hidden");
+    renderRaw(filtered);
+  } else {
+    raw.classList.add("hidden");
+    tbl.classList.remove("hidden");
+    renderTable(filtered);
+  }
+}
+
+async function loadLogs() {
+  try {
+    const data = await apiFetch("/api/logs");
+    allEntries = data.entries || [];
+    render();
+  } catch {}
+}
+
+document.getElementById("json-toggle").addEventListener("change", e => {
+  jsonMode = e.target.checked;
+  render();
+});
+document.getElementById("filter-dev").addEventListener("input", render);
+document.getElementById("filter-cmd").addEventListener("input", render);
+document.getElementById("btn-refresh").addEventListener("click", loadLogs);
+
+updateStatus();
+loadLogs();
+setInterval(loadLogs, 5000);
+setInterval(updateStatus, 10000);
+</script>
+</body>
+</html>

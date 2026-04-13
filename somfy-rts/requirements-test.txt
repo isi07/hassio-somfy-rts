@@ -1,4 +1,6 @@
 pytest>=7.0
 pytest-asyncio>=0.21
+pytest-aiohttp>=1.0
 pytest-mock>=3.0
 pyserial>=3.5
+aiohttp>=3.9

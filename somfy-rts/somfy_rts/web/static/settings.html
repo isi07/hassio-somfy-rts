@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Somfy RTS – Einstellungen</title>
+<link rel="stylesheet" href="./static/style.css">
+</head>
+<body>
+
+<header>
+  <h1>Somfy <span>RTS</span></h1>
+  <span id="status-badge" class="badge warn">Verbinde…</span>
+</header>
+
+<nav>
+  <a href="./">Geräte</a>
+  <a href="./wizard">Anlern</a>
+  <a href="./settings" class="active">Einstellungen</a>
+  <a href="./logs">Log</a>
+</nav>
+
+<main>
+  <div class="alert alert-info">
+    ℹ️ Einstellungen werden in Home Assistant unter
+    <strong>Einstellungen → Apps → Somfy RTS → Konfiguration</strong> verwaltet.
+    Änderungen erfordern einen <strong>Neustart der App</strong>.
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">MQTT</div>
+    </div>
+    <div id="mqtt-settings"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Hardware</div>
+    </div>
+    <div id="hw-settings"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Logging &amp; Modus</div>
+    </div>
+    <div id="log-settings"></div>
+  </div>
+
+  <div id="load-err" class="alert alert-err hidden"></div>
+</main>
+
+<script>
+async function apiFetch(path) {
+  const r = await fetch("." + path);
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+function row(key, val, mono) {
+  return `<div class="settings-row">
+    <div class="settings-key">${key}</div>
+    <div class="settings-val${mono ? " mono" : ""}">${val}</div>
+  </div>`;
+}
+
+function bool(v) {
+  return v ? '<span class="text-ok">✓ aktiv</span>' : '<span class="text-dim">inaktiv</span>';
+}
+
+async function loadSettings() {
+  try {
+    const [cfg, status] = await Promise.all([
+      apiFetch("/api/settings"),
+      apiFetch("/api/status"),
+    ]);
+
+    document.getElementById("status-badge").className =
+      "badge " + (status.simulation ? "sim" : status.connected ? "ok" : "err");
+    document.getElementById("status-badge").textContent =
+      status.simulation ? "Simulation" : status.connected ? "Verbunden" : "Getrennt";
+
+    document.getElementById("mqtt-settings").innerHTML =
+      row("mqtt_host", cfg.mqtt_host, true) +
+      row("mqtt_port", cfg.mqtt_port, true) +
+      row("mqtt_user", cfg.mqtt_user || '<span class="text-dim">—</span>', false) +
+      row("mqtt_password", cfg.mqtt_user ? "••••••••" : '<span class="text-dim">—</span>', false);
+
+    document.getElementById("hw-settings").innerHTML =
+      row("usb_port",        cfg.usb_port,        true) +
+      row("baudrate",        cfg.baudrate,         true) +
+      row("address_prefix",  cfg.address_prefix,   true) +
+      row("simulation_mode", bool(cfg.simulation_mode), false);
+
+    document.getElementById("log-settings").innerHTML =
+      row("log_level",   cfg.log_level,           true) +
+      row("log_format",  cfg.log_format,           true) +
+      row("file_logging", bool(cfg.file_logging), false);
+
+  } catch(e) {
+    const el = document.getElementById("load-err");
+    el.textContent = "Fehler beim Laden: " + e.message;
+    el.classList.remove("hidden");
+  }
+}
+
+loadSettings();
+</script>
+</body>
+</html>
