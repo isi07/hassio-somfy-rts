@@ -128,7 +128,7 @@ jobs:
         with:
           args: |
             --${{ matrix.arch }}
-            --target somfy-rts
+            --target /github/workspace/somfy-rts
             --image somfy-rts
             --docker-hub ghcr.io/isi07
             --addon
