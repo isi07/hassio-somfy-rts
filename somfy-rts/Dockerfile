@@ -1,6 +1,9 @@
 ARG BUILD_FROM
 FROM ${BUILD_FROM}
 
+# Override S6-Overlay entrypoint from base image — run.sh directly
+ENTRYPOINT ["/run.sh"]
+
 # HA Builder labels
 ARG BUILD_VERSION
 ARG BUILD_ARCH
@@ -36,4 +39,3 @@ COPY somfy_rts/ ./somfy_rts/
 COPY run.sh /run.sh
 RUN chmod +x /run.sh
 
-CMD ["/run.sh"]
