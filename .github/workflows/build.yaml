@@ -101,16 +101,13 @@ jobs:
           ./actionlint .github/workflows/build.yaml
 
   build:
-    name: Build & push image (${{ matrix.arch }})
+    name: Build & push multi-arch image
     runs-on: ubuntu-latest
     needs: lint
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
       packages: write
-    strategy:
-      matrix:
-        arch: [amd64, aarch64]
 
     steps:
       - name: Checkout repository
@@ -127,8 +124,8 @@ jobs:
         uses: home-assistant/builder@2024.03.5
         with:
           args: |
-            --${{ matrix.arch }}
-            --target /github/workspace/somfy-rts
+            --all
+            --target somfy-rts
             --image somfy-rts
             --docker-hub ghcr.io/isi07
             --addon
