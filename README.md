@@ -17,7 +17,7 @@ und **MQTT**.
 
 | App (ehemals Add-on) | Version | Beschreibung |
 |----------------------|---------|--------------|
-| [Somfy RTS](somfy-rts/DOCS.md) | 0.1.2 | Steuerung von Somfy RTS Geräten via NanoCUL/culfw |
+| [Somfy RTS](somfy-rts/DOCS.md) | 0.2.0 | Steuerung von Somfy RTS Geräten via NanoCUL/culfw |
 
 ---
 
