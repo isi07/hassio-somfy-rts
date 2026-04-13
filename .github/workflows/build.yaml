@@ -143,7 +143,7 @@ jobs:
           push: true
           tags: ghcr.io/isi07/somfy-rts:${{ steps.version.outputs.version }}-${{ matrix.arch }}
           build-args: |
-            BUILD_FROM=ghcr.io/home-assistant/${{ matrix.arch }}-base-python:3.11
+            BUILD_FROM=ghcr.io/home-assistant/${{ matrix.arch }}-base-python:3.12-alpine3.18
 
   manifest:
     name: Create multi-arch manifest
