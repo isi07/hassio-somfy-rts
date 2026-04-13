@@ -68,18 +68,19 @@ def _find_or_create_device(store: Dict, address: str, name: str) -> Dict:
 
 # ---------- öffentliche API ----------
 
-def get_and_increment(address: str, name: str = "") -> int:
-    """Inkrementiert den Rolling Code für address, speichert ATOMAR und gibt neuen Code zurück.
+def get_and_increment(address: str, name: str = "") -> tuple[int, int]:
+    """Inkrementiert den Rolling Code für address, speichert ATOMAR und gibt beide Codes zurück.
 
     Diese Funktion persistiert BEVOR sie zurückkehrt. Der Aufrufer sendet
-    anschließend den RTS-Befehl mit dem zurückgegebenen Code.
+    anschließend den RTS-Befehl mit dem neuen Code.
 
     Args:
         address: 6-stellige Hex-Adresse (Groß- oder Kleinschreibung)
         name: Gerätename (nur für somfy_codes.json lesbar)
 
     Returns:
-        Neuer Rolling Code (1–65535, 16-Bit Rollover)
+        Tuple (old_code, new_code): alter Code vor Inkrement, neuer Code nach Inkrement
+        (neuer Code = 1–65535, 16-Bit Rollover)
     """
     store = _load()
     entry = _find_or_create_device(store, address, name)
@@ -92,7 +93,13 @@ def get_and_increment(address: str, name: str = "") -> int:
 
     _save_atomic(store)  # ATOMAR PERSISTIEREN, bevor RTS gesendet wird
     logger.debug("RC %s: %d → %d", address.upper(), old_code, new_code)
-    return new_code
+
+    # Structured frame logging (optional — only active after init())
+    from .rts_logger import rts_logger  # noqa: PLC0415
+    if rts_logger is not None:
+        rts_logger.log_rc_persist(address.upper(), new_code, CODES_PATH)
+
+    return old_code, new_code
 
 
 def get_current(address: str) -> int:

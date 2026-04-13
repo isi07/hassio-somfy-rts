@@ -7,20 +7,22 @@ import pytest
 class TestIncrement:
     def test_code_increments_by_one(self, tmp_codes_path):
         from somfy_rts.rolling_code import get_and_increment
-        rc1 = get_and_increment("A00001")
-        rc2 = get_and_increment("A00001")
+        _, rc1 = get_and_increment("A00001")
+        _, rc2 = get_and_increment("A00001")
         assert rc2 == rc1 + 1
 
     def test_first_code_is_one(self, tmp_codes_path):
-        """Fresh device starts at RC=0, first call returns 1."""
+        """Fresh device starts at RC=0, first call returns (0, 1)."""
         from somfy_rts.rolling_code import get_and_increment
-        assert get_and_increment("A00001") == 1
+        old, new = get_and_increment("A00001")
+        assert old == 0
+        assert new == 1
 
     def test_different_addresses_are_independent(self, tmp_codes_path):
         from somfy_rts.rolling_code import get_and_increment
         get_and_increment("A00001")
         get_and_increment("A00001")
-        rc_b = get_and_increment("B00001")
+        _, rc_b = get_and_increment("B00001")
         assert rc_b == 1  # B00001 starts fresh
 
 
@@ -40,7 +42,7 @@ class TestAtomicPersistence:
 
     def test_code_persisted_correctly(self, tmp_codes_path):
         from somfy_rts.rolling_code import get_and_increment
-        rc = get_and_increment("A00001")
+        _, rc = get_and_increment("A00001")
         with open(tmp_codes_path, encoding="utf-8") as f:
             data = json.load(f)
         device = next(d for d in data["devices"] if d["address"] == "A00001")
@@ -49,9 +51,9 @@ class TestAtomicPersistence:
 
 class TestRestart:
     def test_code_survives_module_reload(self, tmp_codes_path):
-        """Simulates add-on restart: load RC from file, increment again."""
+        """Simulates app restart: load RC from file, increment again."""
         from somfy_rts.rolling_code import get_and_increment, get_current
-        rc_before = get_and_increment("A00001")
+        _, rc_before = get_and_increment("A00001")
         # get_current reads from file — simulates a fresh module load
         rc_persisted = get_current("A00001")
         assert rc_persisted == rc_before
@@ -62,7 +64,7 @@ class TestRestart:
         for _ in range(5):
             get_and_increment("A00001")
         # Next call must continue from 5, not restart from 0
-        rc = get_and_increment("A00001")
+        _, rc = get_and_increment("A00001")
         assert rc == 6
 
 
@@ -78,7 +80,7 @@ class TestOverflow:
         entry["rolling_code"] = 0xFFFF
         _save_atomic(store)
 
-        result = rc_module.get_and_increment("A00001")
+        _, result = rc_module.get_and_increment("A00001")
         assert result == 0x0000
 
     def test_second_call_after_rollover_is_one(self, tmp_codes_path):
@@ -90,6 +92,6 @@ class TestOverflow:
         entry["rolling_code"] = 0xFFFF
         _save_atomic(store)
 
-        rc_module.get_and_increment("A00001")  # → 0
-        result = rc_module.get_and_increment("A00001")  # → 1
+        rc_module.get_and_increment("A00001")  # → (0xFFFF, 0)
+        _, result = rc_module.get_and_increment("A00001")  # → (0, 1)
         assert result == 1

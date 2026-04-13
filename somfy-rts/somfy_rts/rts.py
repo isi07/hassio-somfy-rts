@@ -22,6 +22,7 @@ WICHTIG: Rolling Code wird ATOMAR persistiert BEVOR build_rts_sequence()
 import logging
 
 from .rolling_code import get_and_increment
+from .rts_logger import rts_logger
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ def build_rts_sequence(address: str, action: str, device_name: str = "") -> list
         )
 
     # Rolling Code inkrementieren und ATOMAR speichern (vor dem Senden!)
-    rolling_code = get_and_increment(address, device_name)
+    rc_before, rolling_code = get_and_increment(address, device_name)
 
     telegram = f"YsA0{cmd_byte:02X}{rolling_code:04X}{address.upper()}"
 
@@ -74,6 +75,18 @@ def build_rts_sequence(address: str, action: str, device_name: str = "") -> list
         rolling_code,
         telegram,
     )
+
+    if rts_logger is not None:
+        serial_bytes = (telegram + "\n").encode("ascii").hex()
+        rts_logger.log_frame(
+            device_id=address.upper(),
+            cmd=action.upper(),
+            rc_before=rc_before,
+            rc_after=rolling_code,
+            frame=telegram,
+            serial_bytes=serial_bytes,
+            success=True,
+        )
 
     # Yr1 MUSS vor dem Telegramm gesendet werden
     return ["Yr1", telegram]

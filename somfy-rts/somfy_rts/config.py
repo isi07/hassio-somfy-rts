@@ -43,6 +43,9 @@ class Config:
     mqtt_password: str = ""
     log_level: str = "INFO"
     address_prefix: str = "A000"  # single source of truth — passed to PairingWizard
+    log_format: str = "text"       # "text" | "json"
+    simulation_mode: bool = False  # Use SimGateway instead of CULGateway
+    file_logging: bool = False     # Write RTS frames to /share/somfy_rts/rts_frames.log
 
 
 def load_config() -> Config:
@@ -56,4 +59,7 @@ def load_config() -> Config:
         mqtt_password=os.environ.get("SOMFY_MQTT_PASSWORD", ""),
         log_level=os.environ.get("SOMFY_LOG_LEVEL", "info").upper(),
         address_prefix=os.environ.get("SOMFY_ADDRESS_PREFIX", "A000").upper(),
+        log_format=os.environ.get("SOMFY_LOG_FORMAT", "text").lower(),
+        simulation_mode=os.environ.get("SOMFY_SIMULATION_MODE", "false").lower() == "true",
+        file_logging=os.environ.get("SOMFY_FILE_LOGGING", "false").lower() == "true",
     )

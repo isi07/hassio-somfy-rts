@@ -33,6 +33,9 @@ options:
   baudrate: 9600
   address_prefix: "A000"
   log_level: "info"
+  log_format: "text"
+  simulation_mode: false
+  file_logging: false
 
 schema:
   mqtt_host: str
@@ -43,5 +46,8 @@ schema:
   baudrate: int
   address_prefix: str
   log_level: list(debug|info|warning|error)
+  log_format: list(text|json)
+  simulation_mode: bool
+  file_logging: bool
 
 image: "ghcr.io/isi07/hassio-somfy-rts/somfy-rts"

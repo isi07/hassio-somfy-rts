@@ -1,4 +1,4 @@
-"""Add-on entry point."""
+"""App entry point."""
 
 import logging
 import signal
@@ -8,30 +8,36 @@ import time
 
 from . import __version__
 from .config import load_config
-from .gateway import CULGateway, GatewayError
+from .gateway import CULGateway, GatewayError, SimGateway
 from .mqtt_client import MQTTClient
 from .rolling_code import _load as load_codes
+from .rts_logger import init as init_rts_logger
 
 
 def main() -> None:
+    config = load_config()
+
     logging.basicConfig(
-        level=logging.INFO,
+        level=getattr(logging, config.log_level, logging.INFO),
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%dT%H:%M:%S",
         stream=sys.stdout,
     )
     logger = logging.getLogger(__name__)
-    logger.info("=== Somfy RTS Add-on v%s starting ===", __version__)
+    logger.info("=== Somfy RTS App v%s starting ===", __version__)
 
-    config = load_config()
-    logging.getLogger().setLevel(getattr(logging, config.log_level, logging.INFO))
+    init_rts_logger(log_format=config.log_format, file_logging=config.file_logging)
 
     # Load device list from somfy_codes.json (source of truth for devices)
     store = load_codes()
     device_count = len(store.get("devices", []))
     logger.info("Found %d device(s) in somfy_codes.json.", device_count)
 
-    gateway = CULGateway(config.usb_port, config.baudrate)
+    if config.simulation_mode:
+        logger.info("Simulation mode active — using SimGateway (no hardware required).")
+        gateway: CULGateway | SimGateway = SimGateway()
+    else:
+        gateway = CULGateway(config.usb_port, config.baudrate)
     mqtt_client = MQTTClient(config)
 
     running = True
@@ -67,7 +73,7 @@ def main() -> None:
     # Register gateway device in HA
     mqtt_client.register_gateway(gateway.port_name, device_count)
 
-    logger.info("Add-on running — waiting for MQTT commands...")
+    logger.info("App running — waiting for MQTT commands...")
 
     while running:
         time.sleep(1)
@@ -75,7 +81,7 @@ def main() -> None:
     mqtt_client.update_gateway_status("Offline")
     mqtt_client.disconnect()
     gateway.disconnect()
-    logger.info("Somfy RTS Add-on stopped.")
+    logger.info("Somfy RTS App stopped.")
 
 
 if __name__ == "__main__":

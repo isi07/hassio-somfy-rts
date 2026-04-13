@@ -12,6 +12,9 @@ MQTT_USER=$(bashio::config 'mqtt_user')
 MQTT_PASSWORD=$(bashio::config 'mqtt_password')
 ADDRESS_PREFIX=$(bashio::config 'address_prefix')
 LOG_LEVEL=$(bashio::config 'log_level')
+LOG_FORMAT=$(bashio::config 'log_format')
+SIMULATION_MODE=$(bashio::config 'simulation_mode')
+FILE_LOGGING=$(bashio::config 'file_logging')
 
 # ---------- Validate USB port ----------
 if [ ! -e "${USB_PORT}" ]; then
@@ -35,9 +38,15 @@ export SOMFY_MQTT_PORT="${MQTT_PORT}"
 export SOMFY_MQTT_USER="${MQTT_USER}"
 export SOMFY_MQTT_PASSWORD="${MQTT_PASSWORD}"
 export SOMFY_LOG_LEVEL="${LOG_LEVEL}"
+export SOMFY_LOG_FORMAT="${LOG_FORMAT}"
+export SOMFY_SIMULATION_MODE="${SIMULATION_MODE}"
+export SOMFY_FILE_LOGGING="${FILE_LOGGING}"
 export SOMFY_CODES_PATH="/data/somfy_codes.json"
 
-bashio::log.info "USB: ${USB_PORT} | MQTT: ${MQTT_HOST}:${MQTT_PORT} | Log: ${LOG_LEVEL}"
+bashio::log.info "USB: ${USB_PORT} | MQTT: ${MQTT_HOST}:${MQTT_PORT} | Log: ${LOG_LEVEL} | Format: ${LOG_FORMAT}"
+
+# ---------- Prepare log directory ----------
+mkdir -p /share/somfy_rts/
 
 # ---------- Start Python application ----------
 cd /app || exit 1

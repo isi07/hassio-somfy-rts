@@ -10,6 +10,8 @@ from typing import Optional
 
 import serial
 
+from .rts_logger import rts_logger
+
 logger = logging.getLogger(__name__)
 
 CMD_VERSION = b"V\n"
@@ -77,6 +79,8 @@ class CULGateway(BaseGateway):
             self._serial.flush()
             time.sleep(0.5)  # Wait until CUL is ready to receive RTS commands
             logger.info("NanoCUL verbunden auf %s — %s (RTS Modus aktiv)", self._port, version)
+            if rts_logger is not None:
+                rts_logger.log_connect(self._port, self._baud_rate)
         except serial.SerialException as e:
             raise GatewayError(f"Kann {self._port} nicht öffnen: {e}") from e
 
@@ -84,6 +88,8 @@ class CULGateway(BaseGateway):
         if self._serial and self._serial.is_open:
             self._serial.close()
             logger.info("NanoCUL getrennt.")
+            if rts_logger is not None:
+                rts_logger.log_disconnect(self._port)
 
     def send_raw(self, command: str) -> None:
         """Sendet einen culfw-Befehl (fügt Newline an)."""
@@ -113,3 +119,50 @@ class CULGateway(BaseGateway):
     def _flush(self) -> None:
         self._serial.reset_input_buffer()
         self._serial.reset_output_buffer()
+
+
+class SimGateway(BaseGateway):
+    """Hardware-free simulation gateway for testing and development.
+
+    Records all sent commands in memory. Does not require a NanoCUL device.
+    Useful for CI, unit tests, and dry-run scenarios.
+    """
+
+    def __init__(self, port: str = "sim://localhost") -> None:
+        self._port = port
+        self._connected = False
+        self.sent_commands: list[str] = []
+
+    def connect(self) -> None:
+        """Simulate a gateway connection."""
+        self._connected = True
+        logger.info("[SIM] Gateway verbunden auf %s", self._port)
+        if rts_logger is not None:
+            rts_logger.log_connect(self._port, 0)
+
+    def disconnect(self) -> None:
+        """Simulate a gateway disconnection."""
+        if self._connected:
+            self._connected = False
+            logger.info("[SIM] Gateway getrennt.")
+            if rts_logger is not None:
+                rts_logger.log_disconnect(self._port)
+
+    def send_raw(self, command: str) -> None:
+        """Record a command without transmitting over serial.
+
+        Args:
+            command: culfw command string (without newline).
+        """
+        if not self._connected:
+            raise GatewayError("SimGateway nicht verbunden.")
+        self.sent_commands.append(command)
+        logger.debug("[SIM] TX: %r", command)
+
+    @property
+    def is_connected(self) -> bool:
+        return self._connected
+
+    @property
+    def port_name(self) -> str:
+        return self._port
