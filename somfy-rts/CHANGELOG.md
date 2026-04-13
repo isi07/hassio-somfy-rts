@@ -1,32 +1,49 @@
 # Changelog
 
-Alle nennenswerten Änderungen werden in dieser Datei dokumentiert.
-Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/).
+Alle nennenswerten Änderungen werden hier dokumentiert.
+Format: [Conventional Commits](https://www.conventionalcommits.org/de/)
 
-## [0.1.2] - 2026-04-12
 
-### Behoben
-- GitHub Actions Release-Job: `orhun/git-cliff-action` auf v4 aktualisiert
-  (v3 nutzte Debian Buster EOL — apt-Repository 404-Fehler)
+## [0.2.0] - 2026-04-13
 
-## [0.1.1] - 2026-04-12
+### CI/CD
 
-### Behoben
-- Ruff Lint-Fehler in `wizard.py`: ungenutzte Importe `dataclasses.field`
-  und `rolling_code.get_settings` entfernt
+- Add yamllint, shellcheck, hadolint, jsonlint to build pipeline
+- Add yamllint config and blueprint validator
+- Add addon-linter, actionlint and dependabot
+- Run lint on PRs, build+release only on tags
+- Add eslint for JavaScript files
 
-## [0.1.0] - 2026-04-12
+### Dokumentation
 
-### Hinzugefügt
-- Initiale Version des Somfy RTS Add-ons
-- Unterstützung für NanoCUL USB-Stick mit culfw-Firmware (433,42 MHz)
-- MQTT Integration mit Home Assistant Discovery (Modus A und B)
-- Gerätetypen: `awning`, `shutter`, `blind`, `screen`, `gate`, `light`, `heater`
-- Persistente Rolling Code Speicherung in `/data/somfy_codes.json`
-  (atomar via tempfile + os.replace, strom-ausfallsicher)
-- Unterstützung für Architekturen: amd64, aarch64, armv7
-- Befehle: OPEN, CLOSE, STOP, PROG, MY_UP, MY_DOWN
-- Pairing-Wizard (`PairingWizard`) für 5-stufigen Anlernprozess
-- ioBroker-Migration ohne erneutes Pairing
-- Gateway-Abstraktion (`BaseGateway` / `CULGateway`)
-- Template Blueprints für Markisen und Rollläden (HA 2024.11+)
+- Update all documentation to current state
+- Add documentation maintenance rules to CLAUDE.md
+- Add shields badges and update addon→app terminology
+
+### Fehlerbehebungen
+
+- Bump config.yaml version to 0.1.2, add code quality standards
+- Add missing -> None type hints and annotate paho callbacks
+- Resolve shellcheck warnings in run.sh
+- Resolve hadolint warnings in Dockerfile
+- Clean up config.yaml per addon-linter requirements
+- Remove unused set_address_prefix import in wizard.py
+
+### Neu hinzugefügt
+
+- Add structured RTS frame logging system
+- Add web UI with device dashboard, pairing wizard and settings
+
+### Tests
+
+- Add pytest unit tests for rts, rolling_code and wizard
+
+### Build
+
+- **deps:** Bump hadolint/hadolint-action from 3.1.0 to 3.3.0
+- **deps:** Bump softprops/action-gh-release from 2 to 3
+- **deps:** Bump actions/setup-python from 5 to 6
+- **deps:** Bump actions/checkout from 4 to 6
+- **deps:** Bump docker/login-action from 3 to 4
+
+
