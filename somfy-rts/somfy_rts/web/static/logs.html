@@ -32,6 +32,9 @@
       <input type="text" id="filter-dev"  placeholder="Filter Gerät…">
       <input type="text" id="filter-cmd"  placeholder="Filter Befehl…">
       <button class="btn btn-secondary" id="btn-refresh">↺ Aktualisieren</button>
+      <a id="btn-download" class="btn btn-secondary hidden"
+         href="./api/logs/download" download="rts_frames.log"
+         title="RTS Frame Log herunterladen">📥 Log herunterladen</a>
     </div>
 
     <div class="toggle-row">
@@ -227,6 +230,9 @@ async function loadTimezone() {
     if (s.timezone) {
       serverTZ = s.timezone;
       document.getElementById("tz-hint").textContent = "🕐 " + s.timezone;
+    }
+    if (s.file_logging) {
+      document.getElementById("btn-download").classList.remove("hidden");
     }
   } catch {}
 }

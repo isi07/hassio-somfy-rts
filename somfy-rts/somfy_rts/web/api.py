@@ -17,9 +17,11 @@ Endpoints:
   POST /api/settings             → (read-only — managed via HA)
 
   GET  /api/logs                 → last 100 RTS frame log entries
+  GET  /api/logs/download        → download /share/somfy_rts/rts_frames.log
 """
 
 import logging
+import pathlib
 from collections import deque
 from typing import Optional
 
@@ -287,3 +289,21 @@ async def get_logs(request: web.Request) -> web.Response:
     """Return the last 100 RTS frame log entries."""
     ctx: AppContext = request.app["ctx"]
     return web.json_response({"entries": list(ctx.log_buffer)})
+
+
+@routes.get("/api/logs/download")
+async def download_log_file(request: web.Request) -> web.FileResponse:
+    """Download the rotating RTS frame log file.
+
+    Only available when file_logging is enabled in the add-on config.
+    Returns 404 if the file does not exist yet.
+    """
+    log_path = pathlib.Path("/share/somfy_rts/rts_frames.log")
+    if not log_path.exists():
+        raise web.HTTPNotFound(
+            reason="Log-Datei nicht vorhanden. Bitte file_logging in der App-Konfiguration aktivieren."
+        )
+    return web.FileResponse(
+        log_path,
+        headers={"Content-Disposition": 'attachment; filename="rts_frames.log"'},
+    )
