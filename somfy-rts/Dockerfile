@@ -4,6 +4,10 @@ FROM ${BUILD_FROM}
 # Override S6-Overlay entrypoint from base image — run.sh directly
 ENTRYPOINT ["/run.sh"]
 
+# Version injected at build time — readable at runtime via SOMFY_VERSION env var
+ARG BUILD_VERSION=unknown
+ENV SOMFY_VERSION=${BUILD_VERSION}
+
 # HA Builder labels
 ARG BUILD_VERSION
 ARG BUILD_ARCH
