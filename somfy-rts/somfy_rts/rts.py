@@ -22,7 +22,6 @@ WICHTIG: Rolling Code wird ATOMAR persistiert BEVOR build_rts_sequence()
 import logging
 
 from .rolling_code import get_and_increment
-from .rts_logger import rts_logger
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +75,7 @@ def build_rts_sequence(address: str, action: str, device_name: str = "") -> list
         telegram,
     )
 
+    from .rts_logger import rts_logger  # noqa: PLC0415
     if rts_logger is not None:
         serial_bytes = (telegram + "\n").encode("ascii").hex()
         rts_logger.log_frame(

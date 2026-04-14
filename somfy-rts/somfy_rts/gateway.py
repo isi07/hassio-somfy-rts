@@ -10,8 +10,6 @@ from typing import Optional
 
 import serial
 
-from .rts_logger import rts_logger
-
 logger = logging.getLogger(__name__)
 
 CMD_VERSION = b"V\n"
@@ -79,6 +77,7 @@ class CULGateway(BaseGateway):
             self._serial.flush()
             time.sleep(0.5)  # Wait until CUL is ready to receive RTS commands
             logger.info("NanoCUL verbunden auf %s — %s (RTS Modus aktiv)", self._port, version)
+            from .rts_logger import rts_logger  # noqa: PLC0415
             if rts_logger is not None:
                 rts_logger.log_connect(self._port, self._baud_rate)
         except serial.SerialException as e:
@@ -88,6 +87,7 @@ class CULGateway(BaseGateway):
         if self._serial and self._serial.is_open:
             self._serial.close()
             logger.info("NanoCUL getrennt.")
+            from .rts_logger import rts_logger  # noqa: PLC0415
             if rts_logger is not None:
                 rts_logger.log_disconnect(self._port)
 
@@ -137,6 +137,7 @@ class SimGateway(BaseGateway):
         """Simulate a gateway connection."""
         self._connected = True
         logger.info("[SIM] Gateway verbunden auf %s", self._port)
+        from .rts_logger import rts_logger  # noqa: PLC0415
         if rts_logger is not None:
             rts_logger.log_connect(self._port, 0)
 
@@ -145,6 +146,7 @@ class SimGateway(BaseGateway):
         if self._connected:
             self._connected = False
             logger.info("[SIM] Gateway getrennt.")
+            from .rts_logger import rts_logger  # noqa: PLC0415
             if rts_logger is not None:
                 rts_logger.log_disconnect(self._port)
 
