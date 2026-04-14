@@ -4,15 +4,14 @@ Alle nennenswerten Änderungen werden hier dokumentiert.
 Format: [Conventional Commits](https://www.conventionalcommits.org/de/)
 
 
-## [0.3.1] - 2026-04-14
+## [0.3.2] - 2026-04-14
 
 ### Fehlerbehebungen
 
-- Save device_type in somfy_codes.json
+- Delete button visible, MY buttons correct, log shows date and timezone
 
 ### Neu hinzugefügt
 
-- Add timezone configuration for log timestamps
-- Add delete button to device card in Web UI
+- Add RTS frame log file download endpoint
 
 
