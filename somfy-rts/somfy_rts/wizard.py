@@ -247,6 +247,7 @@ class PairingWizard:
         # Pre-create entry with RC=0 so it's present even before send_prog()
         entry = _find_or_create_device(store, address, name)
         entry["rolling_code"] = 0
+        entry["device_type"] = self._session.device_type
         _save_atomic(store)
 
         return address

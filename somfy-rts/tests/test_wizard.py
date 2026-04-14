@@ -45,6 +45,24 @@ class TestAddressGeneration:
             store = json.load(f)
         assert store["settings"]["address_prefix"] == "C200"
 
+    def test_device_type_saved_in_codes(self, tmp_codes_path, mock_gateway):
+        import json
+        from somfy_rts.wizard import PairingWizard
+        PairingWizard(mock_gateway, "A000").start("Markise", "awning")
+        with open(tmp_codes_path, encoding="utf-8") as f:
+            store = json.load(f)
+        device = store["devices"][0]
+        assert device["device_type"] == "awning"
+
+    def test_device_type_default_is_shutter(self, tmp_codes_path, mock_gateway):
+        import json
+        from somfy_rts.wizard import PairingWizard
+        PairingWizard(mock_gateway, "A000").start("Rollladen")
+        with open(tmp_codes_path, encoding="utf-8") as f:
+            store = json.load(f)
+        device = store["devices"][0]
+        assert device["device_type"] == "shutter"
+
 
 class TestStateTransitions:
     def test_initial_state_is_idle(self, mock_gateway):
