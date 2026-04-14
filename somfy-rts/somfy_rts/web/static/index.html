@@ -81,6 +81,20 @@ async function sendCmd(addr, action, btn) {
   finally { btn.disabled = false; }
 }
 
+async function deleteDevice(addr, name, cardEl) {
+  if (!confirm(`Gerät "${name}" wirklich löschen?\n\nDiese Aktion kann nicht rückgängig gemacht werden.`)) return;
+  try {
+    await apiFetch("/api/devices/" + addr, {method:"DELETE"});
+    cardEl.remove();
+    // Show empty state if no cards remain
+    const grid = document.getElementById("device-grid");
+    if (grid.children.length === 0) {
+      grid.classList.add("hidden");
+      document.getElementById("empty-state").classList.remove("hidden");
+    }
+  } catch(e) { alert("Fehler beim Löschen: " + e.message); }
+}
+
 function renderMyRow(myButtons) {
   if (myButtons === "my_full") {
     return `<div class="cmd-row mt">
@@ -102,7 +116,10 @@ function renderDevice(d) {
   const el = document.createElement("div");
   el.className = "device-card";
   el.innerHTML = `
-    <div class="device-name">${escHtml(d.name)}</div>
+    <div class="device-header">
+      <div class="device-name">${escHtml(d.name)}</div>
+      <button class="btn btn-danger btn-del" title="Gerät löschen">×</button>
+    </div>
     <div class="device-meta">
       <span class="device-type">${TYPE_LABEL[type]||type}</span>
       <span class="device-addr">${d.address}</span>
@@ -118,6 +135,7 @@ function renderDevice(d) {
   el.querySelectorAll("button[data-action]").forEach(btn => {
     btn.addEventListener("click", () => sendCmd(d.address, btn.dataset.action, btn));
   });
+  el.querySelector(".btn-del").addEventListener("click", () => deleteDevice(d.address, d.name, el));
   return el;
 }
 

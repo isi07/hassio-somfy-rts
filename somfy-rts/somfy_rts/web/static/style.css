@@ -143,10 +143,22 @@ main { padding: 1rem 1.25rem; max-width: 900px; }
 }
 .device-card:hover { border-color: var(--accent); }
 
+.device-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: .2rem;
+}
 .device-name {
   font-size: .95rem;
   font-weight: 700;
-  margin-bottom: .2rem;
+}
+.btn-del {
+  padding: .1rem .45rem;
+  font-size: 1rem;
+  line-height: 1;
+  border-radius: 4px;
+  flex-shrink: 0;
 }
 .device-meta {
   display: flex;
