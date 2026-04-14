@@ -17,7 +17,7 @@ import json
 import logging
 import logging.handlers
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
 _LOG_FILE = "/share/somfy_rts/rts_frames.log"
@@ -227,4 +227,9 @@ def init(log_format: str = "text", file_logging: bool = False) -> "RTSLogger":
 # ---------- Internal helpers ----------
 
 def _iso_now() -> str:
-    return datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    """Return current local time as ISO-8601 string.
+
+    Uses the system's local timezone, which is set via the TZ environment
+    variable by run.sh (from the timezone option in config.yaml).
+    """
+    return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")

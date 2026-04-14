@@ -36,6 +36,7 @@ options:
   log_format: "text"
   simulation_mode: false
   file_logging: false
+  timezone: "Europe/Berlin"
 
 schema:
   mqtt_host: str
@@ -49,5 +50,6 @@ schema:
   log_format: list(text|json)
   simulation_mode: bool
   file_logging: bool
+  timezone: str
 
 image: "ghcr.io/isi07/somfy-rts"

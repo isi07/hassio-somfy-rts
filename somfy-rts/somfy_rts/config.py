@@ -46,6 +46,7 @@ class Config:
     log_format: str = "text"       # "text" | "json"
     simulation_mode: bool = False  # Use SimGateway instead of CULGateway
     file_logging: bool = False     # Write RTS frames to /share/somfy_rts/rts_frames.log
+    timezone: str = "Europe/Berlin"  # IANA timezone name for log timestamps
 
 
 def load_config() -> Config:
@@ -62,4 +63,5 @@ def load_config() -> Config:
         log_format=os.environ.get("SOMFY_LOG_FORMAT", "text").lower(),
         simulation_mode=os.environ.get("SOMFY_SIMULATION_MODE", "false").lower() == "true",
         file_logging=os.environ.get("SOMFY_FILE_LOGGING", "false").lower() == "true",
+        timezone=os.environ.get("SOMFY_TIMEZONE", "Europe/Berlin"),
     )

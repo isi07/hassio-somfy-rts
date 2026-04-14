@@ -23,6 +23,7 @@ LOG_LEVEL=$(_opt log_level "info")
 LOG_FORMAT=$(_opt log_format "text")
 SIMULATION_MODE=$(_opt simulation_mode "false")
 FILE_LOGGING=$(_opt file_logging "false")
+TIMEZONE=$(_opt timezone "Europe/Berlin")
 
 # ---------- Validate USB port ----------
 if [ ! -e "${USB_PORT}" ]; then
@@ -50,6 +51,11 @@ export SOMFY_LOG_FORMAT="${LOG_FORMAT}"
 export SOMFY_SIMULATION_MODE="${SIMULATION_MODE}"
 export SOMFY_FILE_LOGGING="${FILE_LOGGING}"
 export SOMFY_CODES_PATH="/data/somfy_codes.json"
+export SOMFY_TIMEZONE="${TIMEZONE}"
+
+# ---------- Set system timezone ----------
+export TZ="${TIMEZONE}"
+ln -sf "/usr/share/zoneinfo/${TIMEZONE}" /etc/localtime 2>/dev/null || true
 
 echo "USB: ${USB_PORT} | MQTT: ${MQTT_HOST}:${MQTT_PORT} | Log: ${LOG_LEVEL} | Format: ${LOG_FORMAT}"
 

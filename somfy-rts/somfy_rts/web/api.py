@@ -258,6 +258,7 @@ async def get_settings(request: web.Request) -> web.Response:
             "log_format": c.log_format,
             "simulation_mode": c.simulation_mode,
             "file_logging": c.file_logging,
+            "timezone": c.timezone,
         }
     )
 

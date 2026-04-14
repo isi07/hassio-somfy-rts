@@ -24,6 +24,7 @@
   <div class="card">
     <div class="card-header">
       <div class="card-title">RTS Frame Log</div>
+      <span id="tz-hint" class="text-dim text-sm"></span>
       <span id="entry-count" class="text-dim text-sm">–</span>
     </div>
 
@@ -215,7 +216,16 @@ document.getElementById("filter-dev").addEventListener("input", render);
 document.getElementById("filter-cmd").addEventListener("input", render);
 document.getElementById("btn-refresh").addEventListener("click", loadLogs);
 
+async function loadTimezone() {
+  try {
+    const s = await apiFetch("/api/settings");
+    const hint = document.getElementById("tz-hint");
+    if (s.timezone) hint.textContent = "🕐 " + s.timezone;
+  } catch {}
+}
+
 updateStatus();
+loadTimezone();
 loadLogs();
 setInterval(loadLogs, 5000);
 setInterval(updateStatus, 10000);
