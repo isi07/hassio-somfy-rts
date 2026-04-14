@@ -32,10 +32,11 @@
       <input type="text" id="filter-dev"  placeholder="Filter Gerät…">
       <input type="text" id="filter-cmd"  placeholder="Filter Befehl…">
       <button class="btn btn-secondary" id="btn-refresh">↺ Aktualisieren</button>
-      <a id="btn-download" class="btn btn-secondary hidden"
+      <a id="btn-download" class="btn btn-secondary"
          href="./api/logs/download" download="rts_frames.log"
          title="RTS Frame Log herunterladen">📥 Log herunterladen</a>
     </div>
+    <p id="download-hint" class="text-dim text-sm hidden" style="margin:.25rem 0 0"></p>
 
     <div class="toggle-row">
       <input type="checkbox" id="json-toggle">
@@ -125,15 +126,13 @@ function formatTime(ts) {
   if (!ts) return "–";
   const d = typeof ts === "number" ? new Date(ts * 1000) : new Date(ts);
   const tz = serverTZ || Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const parts = new Intl.DateTimeFormat("de-DE", {
-    day:"2-digit", month:"2-digit", year:"numeric",
-    hour:"2-digit", minute:"2-digit", second:"2-digit",
-    hour12: false, timeZone: tz
-  }).formatToParts(d);
-  const p = Object.fromEntries(parts.map(x => [x.type, x.value]));
-  const tzName = new Intl.DateTimeFormat("de-DE", {timeZone: tz, timeZoneName:"short"})
+  const dateStr = d.toLocaleDateString("de-DE",
+    {day:"2-digit", month:"2-digit", year:"numeric", timeZone: tz});
+  const timeStr = d.toLocaleTimeString("de-DE",
+    {hour:"2-digit", minute:"2-digit", second:"2-digit", hour12: false, timeZone: tz});
+  const tzShort = new Intl.DateTimeFormat("de-DE", {timeZone: tz, timeZoneName:"short"})
     .formatToParts(d).find(x => x.type === "timeZoneName")?.value || tz;
-  return `${p.day}.${p.month}.${p.year} ${p.hour}:${p.minute}:${p.second} (${tzName})`;
+  return `${dateStr} ${timeStr} (${tzShort})`;
 }
 
 function applyFilter() {
@@ -231,8 +230,10 @@ async function loadTimezone() {
       serverTZ = s.timezone;
       document.getElementById("tz-hint").textContent = "🕐 " + s.timezone;
     }
-    if (s.file_logging) {
-      document.getElementById("btn-download").classList.remove("hidden");
+    const hint = document.getElementById("download-hint");
+    if (!s.file_logging && hint) {
+      hint.textContent = "⚠ File Logging nicht aktiv – in Konfiguration aktivieren";
+      hint.classList.remove("hidden");
     }
   } catch {}
 }

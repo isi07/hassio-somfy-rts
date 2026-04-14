@@ -115,6 +115,7 @@ function renderDevice(d) {
   const lbl = CMD_LABELS[type] || {up:"Auf", dn:"Ab", my_buttons:"my"};
   const el = document.createElement("div");
   el.className = "device-card";
+  el.dataset.addr = d.address;
   el.innerHTML = `
     <div class="device-header">
       <div class="device-name">${escHtml(d.name)}</div>
@@ -130,7 +131,7 @@ function renderDevice(d) {
       <button class="btn btn-dn"   data-action="CLOSE">▼ ${escHtml(lbl.dn)}</button>
     </div>
     ${renderMyRow(lbl.my_buttons || "my")}
-    <div class="device-rc">RC: <span class="mono">${d.rolling_code}</span></div>
+    <div class="device-rc">RC: <span class="mono rc-value">${d.rolling_code}</span></div>
   `;
   el.querySelectorAll("button[data-action]").forEach(btn => {
     btn.addEventListener("click", () => sendCmd(d.address, btn.dataset.action, btn));
@@ -162,10 +163,21 @@ async function loadDevices() {
   }
 }
 
+async function updateRollingCodes() {
+  try {
+    const data = await apiFetch("/api/devices");
+    (data.devices || []).forEach(d => {
+      const span = document.querySelector(`[data-addr="${d.address}"] .rc-value`);
+      if (span) span.textContent = d.rolling_code;
+    });
+  } catch {}
+}
+
 updateStatus();
 loadDevices();
 setInterval(updateStatus, 10000);
-setInterval(loadDevices, 30000);
+setInterval(updateRollingCodes, 5000);
+setInterval(loadDevices, 60000);
 </script>
 </body>
 </html>
