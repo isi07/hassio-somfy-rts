@@ -54,6 +54,20 @@ def create_app(ctx: AppContext) -> web.Application:
     app.router.add_get("/logs",         _serve_logs)
     app.router.add_get("/logs.html",    _serve_logs)
 
+    # Disable caching for all static assets and HTML pages so browsers
+    # always fetch the latest version after an add-on update.
+    async def _on_prepare(request: web.Request, response: web.StreamResponse) -> None:
+        if "/static/" in request.path or request.path in (
+            "/", "/wizard", "/wizard.html",
+            "/settings", "/settings.html",
+            "/logs", "/logs.html",
+        ):
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+
+    app.on_response_prepare.append(_on_prepare)
+
     return app
 
 
