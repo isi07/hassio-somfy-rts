@@ -24,7 +24,7 @@
   <div class="card">
     <div class="card-header">
       <div class="card-title">RTS Frame Log</div>
-      <span id="tz-hint" class="text-dim text-sm"></span>
+      <span id="tz-hint" class="text-sm" style="color:var(--accent);margin-left:auto;margin-right:.5rem"></span>
       <span id="entry-count" class="text-dim text-sm">–</span>
     </div>
 
@@ -76,6 +76,7 @@
 <script>
 let allEntries = [];
 let jsonMode = false;
+let serverTZ = null;
 
 async function apiFetch(path) {
   const r = await fetch("." + path);
@@ -120,12 +121,16 @@ function parseEntry(entry) {
 function formatTime(ts) {
   if (!ts) return "–";
   const d = typeof ts === "number" ? new Date(ts * 1000) : new Date(ts);
-  const day  = String(d.getDate()).padStart(2,"0");
-  const mon  = String(d.getMonth()+1).padStart(2,"0");
-  const year = d.getFullYear();
-  const time = d.toLocaleTimeString("de-DE", {hour12:false});
-  const ms   = String(d.getMilliseconds()).padStart(3,"0");
-  return `${day}.${mon}.${year} ${time}.${ms}`;
+  const tz = serverTZ || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const parts = new Intl.DateTimeFormat("de-DE", {
+    day:"2-digit", month:"2-digit", year:"numeric",
+    hour:"2-digit", minute:"2-digit", second:"2-digit",
+    hour12: false, timeZone: tz
+  }).formatToParts(d);
+  const p = Object.fromEntries(parts.map(x => [x.type, x.value]));
+  const tzName = new Intl.DateTimeFormat("de-DE", {timeZone: tz, timeZoneName:"short"})
+    .formatToParts(d).find(x => x.type === "timeZoneName")?.value || tz;
+  return `${p.day}.${p.month}.${p.year} ${p.hour}:${p.minute}:${p.second} (${tzName})`;
 }
 
 function applyFilter() {
@@ -219,8 +224,10 @@ document.getElementById("btn-refresh").addEventListener("click", loadLogs);
 async function loadTimezone() {
   try {
     const s = await apiFetch("/api/settings");
-    const hint = document.getElementById("tz-hint");
-    if (s.timezone) hint.textContent = "🕐 " + s.timezone;
+    if (s.timezone) {
+      serverTZ = s.timezone;
+      document.getElementById("tz-hint").textContent = "🕐 " + s.timezone;
+    }
   } catch {}
 }
 
