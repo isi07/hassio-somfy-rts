@@ -41,13 +41,13 @@ const TYPE_LABEL = {
   screen:"Rollo", gate:"Tor", light:"Licht", heater:"Heizung"
 };
 const CMD_LABELS = {
-  awning: {up:"Ausfahren", dn:"Einfahren"},
-  shutter:{up:"Hochfahren",dn:"Runterfahren"},
-  blind:  {up:"Öffnen",   dn:"Schließen"},
-  screen: {up:"Hochfahren",dn:"Runterfahren"},
-  gate:   {up:"Öffnen",   dn:"Schließen"},
-  light:  {up:"Ein",      dn:"Aus"},
-  heater: {up:"Ein",      dn:"Aus"},
+  awning: {up:"Ausfahren",  dn:"Einfahren",    my_buttons:"my"},
+  shutter:{up:"Hochfahren", dn:"Runterfahren", my_buttons:"my"},
+  blind:  {up:"Öffnen",    dn:"Schließen",    my_buttons:"my_full"},
+  screen: {up:"Hochfahren", dn:"Runterfahren", my_buttons:"my"},
+  gate:   {up:"Öffnen",    dn:"Schließen",    my_buttons:"my"},
+  light:  {up:"Ein",       dn:"Aus",          my_buttons:"none"},
+  heater: {up:"Ein",       dn:"Aus",          my_buttons:"none"},
 };
 
 async function apiFetch(path, opts) {
@@ -81,9 +81,24 @@ async function sendCmd(addr, action, btn) {
   finally { btn.disabled = false; }
 }
 
+function renderMyRow(myButtons) {
+  if (myButtons === "my_full") {
+    return `<div class="cmd-row mt">
+      <button class="btn btn-my" data-action="MY_UP">MY ▲</button>
+      <button class="btn btn-my" data-action="MY_DOWN">MY ▼</button>
+    </div>`;
+  }
+  if (myButtons === "my") {
+    return `<div class="cmd-row mt">
+      <button class="btn btn-my" data-action="STOP">■ MY</button>
+    </div>`;
+  }
+  return "";
+}
+
 function renderDevice(d) {
   const type = d.device_type || d.type || "shutter";
-  const lbl = CMD_LABELS[type] || {up:"Auf", dn:"Ab"};
+  const lbl = CMD_LABELS[type] || {up:"Auf", dn:"Ab", my_buttons:"my"};
   const el = document.createElement("div");
   el.className = "device-card";
   el.innerHTML = `
@@ -97,10 +112,7 @@ function renderDevice(d) {
       <button class="btn btn-stop" data-action="STOP">■ STOP</button>
       <button class="btn btn-dn"   data-action="CLOSE">▼ ${escHtml(lbl.dn)}</button>
     </div>
-    <div class="cmd-row mt">
-      <button class="btn btn-my" data-action="MY_UP">MY ▲</button>
-      <button class="btn btn-my" data-action="MY_DOWN">MY ▼</button>
-    </div>
+    ${renderMyRow(lbl.my_buttons || "my")}
     <div class="device-rc">RC: <span class="mono">${d.rolling_code}</span></div>
   `;
   el.querySelectorAll("button[data-action]").forEach(btn => {
