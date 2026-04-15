@@ -131,6 +131,10 @@ class MQTTClient:
     def update_gateway_status(self, status: str) -> None:
         self._client.publish(f"{GW_TOPIC_BASE}/status", status, retain=True)
 
+    def update_device_count(self, count: int) -> None:
+        """Aktualisiert den Geräteanzahl-Sensor am Gateway (z.B. nach Import oder Löschen)."""
+        self._client.publish(f"{GW_TOPIC_BASE}/device_count", str(count), retain=True)
+
     # ---------- Geräte-Registration ----------
 
     def register_device(

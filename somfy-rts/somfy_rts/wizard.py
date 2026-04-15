@@ -203,14 +203,15 @@ class PairingWizard:
         store = _load()
         entry = _find_or_create_device(store, addr, name)
         entry["rolling_code"] = int(rolling_code)
+        entry["device_type"] = device_type
         entry["mode"] = mode_upper
         if name:
             entry["name"] = name
         _save_atomic(store)
 
         logger.info(
-            "ioBroker import: '%s' Adresse=%s RC=%d Modus=%s gespeichert.",
-            name, addr, rolling_code, mode_upper,
+            "ioBroker import: '%s' Adresse=%s RC=%d Typ=%s Modus=%s gespeichert.",
+            name, addr, rolling_code, device_type, mode_upper,
         )
         return {
             "name": name,

@@ -336,6 +336,27 @@ class TestImportDevice:
         addresses = [d["address"].upper() for d in store.get("devices", [])]
         assert "B00042" in addresses
 
+    async def test_import_device_type_persisted(self, client, tmp_codes_path):
+        """device_type is saved to somfy_codes.json (regression: was not persisted)."""
+        import somfy_rts.rolling_code as rc
+        await client.post(
+            "/api/devices/import",
+            data=json.dumps({
+                "name": "Carport Markise",
+                "device_type": "awning",
+                "address": "C0DE42",
+                "rolling_code": 55,
+            }),
+            headers={"Content-Type": "application/json"},
+        )
+        store = rc._load()
+        device = next(
+            (d for d in store.get("devices", []) if d["address"].upper() == "C0DE42"),
+            None,
+        )
+        assert device is not None
+        assert device["device_type"] == "awning"
+
     async def test_import_address_case_insensitive(self, client, tmp_codes_path):
         """Lowercase address is accepted and normalised to uppercase."""
         resp = await client.post(

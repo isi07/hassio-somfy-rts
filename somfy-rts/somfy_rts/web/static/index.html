@@ -111,7 +111,9 @@ const TYPE_LABEL = {
   screen:"Rollo", gate:"Tor", light:"Licht", heater:"Heizung"
 };
 const CMD_LABELS = {
-  awning: {up:"Ausfahren",  dn:"Einfahren",    my_buttons:"my"},
+  // Markise: OPEN=Ausfahren (Tuch raus → physikalisch ↓), CLOSE=Einfahren (Tuch rein → physikalisch ↑)
+  // Umgekehrt zur Rollladen-Logik — RTS-Kommandos bleiben unverändert, nur Pfeilrichtung angepasst
+  awning: {up:"Ausfahren",  dn:"Einfahren",    up_arrow:"▼", dn_arrow:"▲", my_buttons:"my"},
   shutter:{up:"Hochfahren", dn:"Runterfahren", my_buttons:"my"},
   blind:  {up:"Öffnen",    dn:"Schließen",    my_buttons:"my_full"},
   screen: {up:"Hochfahren", dn:"Runterfahren", my_buttons:"my"},
@@ -196,9 +198,9 @@ function renderDevice(d) {
       <span class="device-addr">${d.address}</span>
     </div>
     <div class="cmd-row">
-      <button class="btn btn-up"   data-action="OPEN">▲ ${escHtml(lbl.up)}</button>
+      <button class="btn btn-up"   data-action="OPEN">${lbl.up_arrow||"▲"} ${escHtml(lbl.up)}</button>
       <button class="btn btn-stop" data-action="STOP">■ STOP</button>
-      <button class="btn btn-dn"   data-action="CLOSE">▼ ${escHtml(lbl.dn)}</button>
+      <button class="btn btn-dn"   data-action="CLOSE">${lbl.dn_arrow||"▼"} ${escHtml(lbl.dn)}</button>
     </div>
     ${renderMyRow(lbl.my_buttons || "my")}
     <div class="device-rc">RC: <span class="mono rc-value">${d.rolling_code}</span></div>

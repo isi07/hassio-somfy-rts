@@ -159,11 +159,13 @@ async def import_device(request: web.Request) -> web.Response:
         mode=mode,
     )
 
-    # --- Publish MQTT Discovery immediately (no restart required) ---
+    # --- Publish MQTT Discovery + update Gateway device_count ---
     if ctx.mqtt_client is not None:
         device_cfg = DeviceConfig(name=name, type=device_type, address=address, mode=mode)
         dev = Device(device_cfg, ctx.gateway, ctx.mqtt_client)
         dev.setup()
+        updated_count = len(_load().get("devices", []))
+        ctx.mqtt_client.update_device_count(updated_count)
 
     logger.info("Import: '%s' Adresse=%s RC=%d Typ=%s Modus=%s", name, address, rolling_code, device_type, mode)
     return web.json_response(
