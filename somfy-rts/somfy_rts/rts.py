@@ -20,7 +20,7 @@ WICHTIG: Rolling Code wird ATOMAR persistiert BEVOR build_rts_sequence()
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from .rolling_code import get_and_increment
 
