@@ -6,10 +6,15 @@ Discovery-Struktur:
 
   Sub-Device pro Gerät (via_device: Gateway):
     Modus A: cover entity (optimistisch, device_class je Gerätetyp)
+             + 3x sensor (entity_category: diagnostic):
+               rolling_code, last_command (+ raw_frame Attribut), device_address
     Modus B: 3x button (entity_category: config)
-             + 2x sensor: rolling_code, letzter_befehl (entity_category: diagnostic)
+             + 2x sensor (entity_category: diagnostic):
+               rolling_code, last_command (+ raw_frame Attribut)
 
 Availability: LWT auf Topic 'cul2mqtt/status' (online/offline, retain=True).
+Alle Discovery-Payloads enthalten availability mit payload_available='online'
+und payload_not_available='offline'.
 Origin-Block in allen Discovery-Payloads.
 """
 
@@ -151,15 +156,19 @@ class MQTTClient:
         command_handler: Callable[[str], None],
         profile: Dict,
     ) -> None:
-        """Modus A: Optimistisches MQTT Cover-Entity.
-        device_class kommt aus dem Profil (device_profiles.json).
+        """Modus A: Optimistisches MQTT Cover-Entity + 3 Diagnose-Sensoren.
+
+        Cover: device_class kommt aus dem Profil (device_profiles.json).
+        Sensoren: rolling_code, last_command (json_attributes_topic für raw_frame),
+                  device_address (statisch, nur einmal publiziert).
         """
         prefix = MQTT_TOPIC_PREFIX
         slug = device.slug
         state_topic = f"{prefix}/{slug}/state"
         command_topic = f"{prefix}/{slug}/set"
+        sub_dev = _sub_device(device, profile)
 
-        payload: Dict = {
+        cover_payload: Dict = {
             "name": device.name,
             "unique_id": f"{device.unique_id_base}_cover",
             "state_topic": state_topic,
@@ -172,18 +181,40 @@ class MQTTClient:
             "state_stopped": "stopped",
             "optimistic": True,
             "availability": _avail_block(),
-            "device": _sub_device(device, profile),
+            "device": sub_dev,
             "origin": ORIGIN,
         }
         device_class = profile.get("device_class")
         if device_class:
-            payload["device_class"] = device_class
+            cover_payload["device_class"] = device_class
 
         disc_topic = f"{HA_DISCOVERY}/cover/{device.unique_id_base}/config"
-        self._client.publish(disc_topic, json.dumps(payload), retain=True)
+        self._client.publish(disc_topic, json.dumps(cover_payload), retain=True)
+
+        # 3 Diagnose-Sensoren
+        diag_sensors = [
+            ("rolling_code",   "Rolling Code",    "mdi:counter",    None),
+            ("last_command",   "Letzter Befehl",  "mdi:history",    f"{prefix}/{slug}/last_command_attr"),
+            ("device_address", "Adresse",         "mdi:identifier", None),
+        ]
+        for sensor_id, sensor_name, icon, attr_topic in diag_sensors:
+            s_payload: Dict = {
+                "name": f"{device.name} {sensor_name}",
+                "unique_id": f"{device.unique_id_base}_{sensor_id}",
+                "state_topic": f"{prefix}/{slug}/{sensor_id}",
+                "entity_category": "diagnostic",
+                "icon": icon,
+                "availability": _avail_block(),
+                "device": sub_dev,
+                "origin": ORIGIN,
+            }
+            if attr_topic:
+                s_payload["json_attributes_topic"] = attr_topic
+            s_disc = f"{HA_DISCOVERY}/sensor/{device.unique_id_base}_{sensor_id}/config"
+            self._client.publish(s_disc, json.dumps(s_payload), retain=True)
 
         self._subscribe(command_topic, command_handler)
-        logger.info("[Modus A] '%s' → Cover auf %s", device.name, command_topic)
+        logger.info("[Modus A] '%s' → Cover + 3 Diagnose-Sensoren auf %s", device.name, command_topic)
 
     def _register_mode_b(
         self,
@@ -224,24 +255,25 @@ class MQTTClient:
 
             self._subscribe(cmd_topic, lambda _payload, a=rts_action: command_handler(a))
 
-        # 2 Diagnose-Sensoren: rolling_code + letzter_befehl
-        for sensor_id, sensor_name, icon in [
-            ("rolling_code", "Rolling Code",   "mdi:counter"),
-            ("last_command", "Letzter Befehl", "mdi:history"),
+        # 2 Diagnose-Sensoren: rolling_code + last_command (mit raw_frame Attribut)
+        for sensor_id, sensor_name, icon, attr_topic in [
+            ("rolling_code", "Rolling Code",   "mdi:counter", None),
+            ("last_command", "Letzter Befehl", "mdi:history", f"{prefix}/{slug}/last_command_attr"),
         ]:
-            state_topic = f"{prefix}/{slug}/{sensor_id}"
-            payload = {
+            s_payload = {
                 "name": f"{device.name} {sensor_name}",
                 "unique_id": f"{device.unique_id_base}_{sensor_id}",
-                "state_topic": state_topic,
+                "state_topic": f"{prefix}/{slug}/{sensor_id}",
                 "entity_category": "diagnostic",
                 "icon": icon,
                 "availability": avail,
                 "device": sub_dev,
                 "origin": ORIGIN,
             }
+            if attr_topic:
+                s_payload["json_attributes_topic"] = attr_topic
             disc_topic = f"{HA_DISCOVERY}/sensor/{device.unique_id_base}_{sensor_id}/config"
-            self._client.publish(disc_topic, json.dumps(payload), retain=True)
+            self._client.publish(disc_topic, json.dumps(s_payload), retain=True)
 
         logger.info("[Modus B] '%s' → 3 Buttons + 2 Sensoren", device.name)
 
@@ -253,9 +285,18 @@ class MQTTClient:
         self._client.publish(topic, state, retain=True)
 
     def publish_diagnostic(self, device: DeviceConfig, key: str, value: str) -> None:
-        """Modus B: Aktualisiert einen Diagnose-Sensor (rolling_code / last_command)."""
+        """Aktualisiert einen Diagnose-Sensor (rolling_code / last_command / device_address)."""
         topic = f"{MQTT_TOPIC_PREFIX}/{device.slug}/{key}"
         self._client.publish(topic, value, retain=True)
+
+    def publish_json_attributes(self, device: DeviceConfig, key: str, attrs: Dict) -> None:
+        """Veröffentlicht JSON-Attribute für einen Sensor (z.B. raw_frame für last_command).
+
+        Publiziert auf Topic somfy/{slug}/{key}_attr als JSON-String.
+        HA liest den Inhalt als Entity-Attribute des zugehörigen Sensors.
+        """
+        topic = f"{MQTT_TOPIC_PREFIX}/{device.slug}/{key}_attr"
+        self._client.publish(topic, json.dumps(attrs), retain=True)
 
     # ---------- Interna ----------
 

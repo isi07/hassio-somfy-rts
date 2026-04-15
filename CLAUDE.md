@@ -171,8 +171,30 @@ BaseGateway (ABC)          # gateway.py
 
 | Modus | Discovery | Verwendung |
 |-------|-----------|------------|
-| A | Cover-Entity (optimistisch) | Standalone, direkte Steuerung |
+| A | Cover-Entity (optimistisch) + 3 Diagnose-Sensoren | Standalone, direkte Steuerung |
 | B | 3 Buttons + 2 Diagnose-Sensoren | Template Cover in HA (Blueprint) |
+
+### Diagnose-Sensoren (beide Modi)
+
+| Sensor | Topic | Inhalt |
+|--------|-------|--------|
+| `rolling_code` | `somfy/<slug>/rolling_code` | aktueller RC nach jedem Befehl (integer) |
+| `last_command` | `somfy/<slug>/last_command` | letzter Befehl (OPEN/CLOSE/STOP/MY) |
+| `last_command` Attribut | `somfy/<slug>/last_command_attr` | `{"raw_frame": "YsA0…"}` — vollständiger Telegram-String |
+
+### Nur Modus A zusätzlich
+
+| Sensor | Topic | Inhalt |
+|--------|-------|--------|
+| `device_address` | `somfy/<slug>/device_address` | statische Hex-Adresse des virtuellen Senders |
+
+### Availability
+
+Alle Discovery-Payloads (Cover, Buttons, Sensoren, Gateway) enthalten einen Availability-Block:
+```json
+{"topic": "cul2mqtt/status", "payload_available": "online", "payload_not_available": "offline"}
+```
+Das LWT-Topic `cul2mqtt/status` wird bei Verbindungsabbruch automatisch auf `"offline"` gesetzt.
 
 ---
 
@@ -226,15 +248,22 @@ Geräte werden **nicht** in `config.yaml` verwaltet, sondern in `/data/somfy_cod
 
 ## MQTT Topics
 
-### Modus A (Cover)
+### Modus A (Cover + Diagnose-Sensoren)
 
 | Topic | Richtung | Inhalt |
 |---|---|---|
-| `homeassistant/cover/<id>/config` | Publish | Discovery-Payload (retain) |
+| `homeassistant/cover/<id>/config` | Publish | Discovery-Payload Cover (retain) |
+| `homeassistant/sensor/<id>_rolling_code/config` | Publish | Discovery Rolling Code (retain) |
+| `homeassistant/sensor/<id>_last_command/config` | Publish | Discovery Letzter Befehl (retain) |
+| `homeassistant/sensor/<id>_device_address/config` | Publish | Discovery Adresse (retain) |
 | `somfy/<slug>/state` | Publish | open / closed / stopped (retain) |
 | `somfy/<slug>/set` | Subscribe | OPEN / CLOSE / STOP |
+| `somfy/<slug>/rolling_code` | Publish | aktueller RC nach Befehl (retain) |
+| `somfy/<slug>/last_command` | Publish | OPEN/CLOSE/STOP/MY (retain) |
+| `somfy/<slug>/last_command_attr` | Publish | `{"raw_frame": "YsA0…"}` (retain) |
+| `somfy/<slug>/device_address` | Publish | Hex-Adresse, einmalig beim Setup (retain) |
 
-### Modus B (Buttons)
+### Modus B (Buttons + Diagnose-Sensoren)
 
 | Topic | Richtung | Inhalt |
 |---|---|---|
@@ -242,7 +271,8 @@ Geräte werden **nicht** in `config.yaml` verwaltet, sondern in `/data/somfy_cod
 | `somfy/<slug>/button/zu` | Subscribe | PRESS |
 | `somfy/<slug>/button/stop` | Subscribe | PRESS |
 | `somfy/<slug>/rolling_code` | Publish | aktueller RC (retain) |
-| `somfy/<slug>/last_command` | Publish | OPEN/CLOSE/STOP (retain) |
+| `somfy/<slug>/last_command` | Publish | OPEN/CLOSE/STOP/MY (retain) |
+| `somfy/<slug>/last_command_attr` | Publish | `{"raw_frame": "YsA0…"}` (retain) |
 
 ### Gateway
 

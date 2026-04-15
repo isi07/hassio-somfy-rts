@@ -5,23 +5,36 @@ Das RTS-Protokoll ist für ALLE Gerätetypen identisch:
 
 Gerätetyp-spezifisches (HA device_class, Icons, Button-Labels) stammt
 ausschließlich aus device_profiles.json — keine separaten Klassen pro Typ.
+
+Diagnose-Sensoren (beide Modi):
+  rolling_code   — aktueller Rolling-Code-Wert nach jedem Befehl
+  last_command   — letzter gesendeter Befehl (OPEN/CLOSE/STOP/MY/…)
+                   json_attributes: {"raw_frame": "YsA0…"} (vollständiger Telegram-String)
+Nur Modus A zusätzlich:
+  device_address — statische Hex-Adresse des virtuellen Senders
 """
 
 import json
 import logging
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from .config import DeviceConfig
 from .gateway import BaseGateway, GatewayError
 from .mqtt_client import MQTTClient
 from .rolling_code import get_current
 from . import rts as rts_module
-from .rts import log_rts_frame
+from .rts import RTSSequence, log_rts_frame
 
 logger = logging.getLogger(__name__)
 
 _PROFILES_PATH = os.path.join(os.path.dirname(__file__), "device_profiles.json")
+
+# MY_UP / MY_DOWN werden als "MY" im last_command-Sensor angezeigt
+_COMMAND_DISPLAY: Dict[str, str] = {
+    "MY_UP": "MY",
+    "MY_DOWN": "MY",
+}
 
 _FALLBACK_PROFILE: Dict[str, Any] = {
     "device_class": None,
@@ -48,8 +61,10 @@ def _load_profiles() -> Dict[str, Any]:
 class Device:
     """Repräsentiert ein einzelnes Somfy RTS Gerät — unabhängig vom Typ.
 
-    Modus A: Empfängt MQTT Cover-Befehle (OPEN/CLOSE/STOP), sendet RTS, meldet Zustand zurück.
-    Modus B: Empfängt Button-Press-Events, sendet RTS, aktualisiert Diagnose-Sensoren.
+    Modus A: Empfängt MQTT Cover-Befehle (OPEN/CLOSE/STOP), sendet RTS,
+             meldet Cover-Zustand + 3 Diagnose-Sensoren zurück.
+    Modus B: Empfängt Button-Press-Events, sendet RTS,
+             aktualisiert 2 Diagnose-Sensoren (rolling_code, last_command).
     """
 
     def __init__(self, device_cfg: DeviceConfig, gateway: BaseGateway, mqtt: MQTTClient) -> None:
@@ -66,6 +81,9 @@ class Device:
 
         if self._device.mode == "A":
             self._mqtt.publish_state(self._device, self._state)
+            self._publish_diagnostics()
+            # device_address ist statisch — einmalig beim Setup publizieren
+            self._mqtt.publish_diagnostic(self._device, "device_address", self._device.address)
         elif self._device.mode == "B":
             self._publish_diagnostics()
 
@@ -85,23 +103,30 @@ class Device:
             return
 
         logger.info("Befehl für '%s': %s", self._device.name, command)
-        self._send_rts(command)
+        seq = self._send_rts(command)
+        if seq is None:
+            return  # Fehler bereits geloggt in _send_rts()
 
         if self._device.mode == "A":
             self._state = _command_to_state(command)
             self._mqtt.publish_state(self._device, self._state)
+            self._publish_diagnostics(last_command=command, raw_frame=seq.frame)
         elif self._device.mode == "B":
-            self._publish_diagnostics(last_command=command)
+            self._publish_diagnostics(last_command=command, raw_frame=seq.frame)
 
-    def _send_rts(self, action: str) -> None:
-        """Baut RTS-Sequenz (RC atomar persistiert) und sendet beide Befehle via Gateway."""
+    def _send_rts(self, action: str) -> Optional[RTSSequence]:
+        """Baut RTS-Sequenz (RC atomar persistiert) und sendet beide Befehle via Gateway.
+
+        Returns:
+            RTSSequence bei Erfolg (enthält frame für raw_frame-Attribut), None bei Fehler.
+        """
         try:
             seq = rts_module.build_rts_sequence(
                 self._device.address, action, self._device.name
             )
         except ValueError as e:
             logger.error("RTS-Protokollfehler bei '%s': %s", self._device.name, e)
-            return
+            return None
 
         try:
             for cmd in seq.commands:
@@ -109,16 +134,28 @@ class Device:
         except GatewayError as e:
             logger.error("Gateway-Fehler bei '%s': %s", self._device.name, e)
             log_rts_frame(seq, self._device.address, action, success=False, error=str(e))
-            return
+            return None
 
         log_rts_frame(seq, self._device.address, action, success=True)
+        return seq
 
-    def _publish_diagnostics(self, last_command: str = "") -> None:
-        """Modus B: Aktualisiert rolling_code und last_command Sensoren in HA."""
+    def _publish_diagnostics(self, last_command: str = "", raw_frame: str = "") -> None:
+        """Aktualisiert rolling_code und last_command Sensoren in HA (Modus A + B).
+
+        Args:
+            last_command: Letzter gesendeter Befehl — wird normalisiert (MY_UP/MY_DOWN → MY).
+            raw_frame:    Vollständiger Telegram-String aus RTSSequence.frame (z.B. 'YsA0…').
+                          Wird als JSON-Attribut 'raw_frame' publiziert wenn gesetzt.
+        """
         rc = get_current(self._device.address)
         self._mqtt.publish_diagnostic(self._device, "rolling_code", str(rc))
         if last_command:
-            self._mqtt.publish_diagnostic(self._device, "last_command", last_command)
+            display_cmd = _COMMAND_DISPLAY.get(last_command, last_command)
+            self._mqtt.publish_diagnostic(self._device, "last_command", display_cmd)
+            if raw_frame:
+                self._mqtt.publish_json_attributes(
+                    self._device, "last_command", {"raw_frame": raw_frame}
+                )
 
 
 def _command_to_state(command: str) -> str:
