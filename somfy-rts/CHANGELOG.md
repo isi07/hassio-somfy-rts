@@ -4,11 +4,14 @@ Alle nennenswerten Änderungen werden hier dokumentiert.
 Format: [Conventional Commits](https://www.conventionalcommits.org/de/)
 
 
-## [0.3.8] - 2026-04-15
+## [0.3.9] - 2026-04-15
 
 ### Fehlerbehebungen
 
-- Ctrl nibble korrekt ins high byte (Somfy RTS Protokoll)
-- Awning OPEN/CLOSE Zuordnung korrigiert (Ausfahren=CLOSE, Einfahren=OPEN)
+- Command_map auch für WebUI REST-API Befehle anwenden
+
+### Refactoring
+
+- HA-Semantik vs RTS-Protokoll getrennt, gerätetypspez. Beschriftungen, Log UP/DOWN/MY
 
 
