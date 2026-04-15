@@ -1,12 +1,13 @@
 {
   "awning": {
-    "_comment": "Markise: OPEN (RTS 0x02) = Ausfahren = Tuch faehrt physikalisch NACH UNTEN (raus) → Pfeil ↓. CLOSE (RTS 0x04) = Einfahren = Tuch faehrt NACH OBEN (rein) → Pfeil ↑. Umgekehrt zur Rollladen-Logik, bei der OPEN = hochfahren ist.",
+    "_comment": "Markise: Physikalisch verifiziert (Telis-FB): Pfeil ↓ = Ausfahren = RTS CLOSE (ctrl 0x4). Pfeil ↑ = Einfahren = RTS OPEN (ctrl 0x2). Umgekehrt zum Rollladen! command_map gilt fuer Modus A (HA Cover-Befehle OPEN/CLOSE werden vor dem Senden uebersetzt). Modus B nutzt das rts-Feld der buttons direkt.",
     "device_class": "awning",
     "icon": "mdi:awning",
     "my_buttons": "my",
+    "command_map": {"OPEN": "CLOSE", "CLOSE": "OPEN"},
     "buttons": {
-      "open":  {"rts": "OPEN",  "label": "Ausfahren", "icon": "mdi:arrow-down-circle"},
-      "close": {"rts": "CLOSE", "label": "Einfahren", "icon": "mdi:arrow-up-circle"},
+      "open":  {"rts": "CLOSE", "label": "Ausfahren", "icon": "mdi:arrow-down-circle"},
+      "close": {"rts": "OPEN",  "label": "Einfahren", "icon": "mdi:arrow-up-circle"},
       "stop":  {"rts": "STOP",  "label": "Stop",      "icon": "mdi:stop-circle"}
     },
     "default_travel_time_open": 35,

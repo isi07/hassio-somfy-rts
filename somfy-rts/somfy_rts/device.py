@@ -97,23 +97,42 @@ class Device:
         )
 
     def _handle_command(self, command: str) -> None:
-        """Verarbeitet MQTT-Befehl: Rolling Code atomar persistieren → RTS senden → Status melden."""
+        """Verarbeitet MQTT-Befehl: Rolling Code atomar persistieren → RTS senden → Status melden.
+
+        Mode A: HA sendet OPEN/CLOSE → wird ggf. per command_map aus dem Profil übersetzt
+                (z.B. awning: OPEN→CLOSE, CLOSE→OPEN). Mode B überspringt die Übersetzung,
+                weil dort das rts-Feld im Profil den RTS-Befehl bereits korrekt festlegt.
+        """
         command = command.upper()
         if command not in {"OPEN", "CLOSE", "STOP", "PROG", "MY_UP", "MY_DOWN"}:
             logger.warning("Unbekannter Befehl '%s' für '%s'.", command, self._device.name)
             return
 
-        logger.info("Befehl für '%s': %s", self._device.name, command)
-        seq = self._send_rts(command)
+        # Mode A: OPEN/CLOSE ggf. per command_map übersetzen (z.B. awning invertiert OPEN↔CLOSE)
+        # Mode B: rts-Feld im Profil hat die Übersetzung bereits übernommen → kein zweites Mapping
+        if self._device.mode == "A" and command in ("OPEN", "CLOSE"):
+            rts_action = self._profile.get("command_map", {}).get(command, command)
+        else:
+            rts_action = command
+
+        if rts_action != command:
+            logger.info(
+                "Befehl für '%s': %s → RTS %s (command_map)",
+                self._device.name, command, rts_action,
+            )
+        else:
+            logger.info("Befehl für '%s': %s", self._device.name, command)
+
+        seq = self._send_rts(rts_action)
         if seq is None:
             return  # Fehler bereits geloggt in _send_rts()
 
         if self._device.mode == "A":
-            self._state = _command_to_state(command)
+            self._state = _command_to_state(command)  # HA-Zustand anhand des Original-Befehls
             self._mqtt.publish_state(self._device, self._state)
-            self._publish_diagnostics(last_command=command, raw_frame=seq.frame)
+            self._publish_diagnostics(last_command=rts_action, raw_frame=seq.frame)
         elif self._device.mode == "B":
-            self._publish_diagnostics(last_command=command, raw_frame=seq.frame)
+            self._publish_diagnostics(last_command=rts_action, raw_frame=seq.frame)
 
     def _send_rts(self, action: str) -> Optional[RTSSequence]:
         """Baut RTS-Sequenz (RC atomar persistiert) und sendet beide Befehle via Gateway.
