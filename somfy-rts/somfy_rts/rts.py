@@ -8,11 +8,16 @@ culfw Befehlsformat (433,42 MHz):
     A0    = festes culfw-Präfix (Timing/Flags)
     CMD   = 1 Byte Hex (2 Zeichen) = Byte 1 des Somfy-Frames
             Byte 1 = (ctrl << 4) | cks
-            ctrl = Befehlsnibble (High-Nibble), z.B. 0x2 für OPEN
+            ctrl = Befehlsnibble (High-Nibble), z.B. 0x2 für UP
             cks  = Prüfsummennibble (Low-Nibble), von culfw intern berechnet
-            → culfw erwartet ctrl im High-Nibble, cks=0; z.B. "20" für OPEN
+            → culfw erwartet ctrl im High-Nibble, cks=0; z.B. "20" für UP
     RC    = Rolling Code, 4 Hex-Zeichen (16-Bit Big-Endian)
     ADDR  = Geräteadresse, 6 Hex-Zeichen (3 Byte)
+
+  Schicht 2 (RTS-Protokoll-Befehle, Eingabe für build_rts_sequence):
+    UP, DOWN, MY, PROG, MY_UP, MY_DOWN
+  Schicht 1 (HA-Semantik) wird von resolve_rts_action() in Schicht 2 übersetzt:
+    OPEN → UP, CLOSE → DOWN, STOP → MY  (Ausnahme awning: OPEN→DOWN, CLOSE→UP)
 
   Checksumme und Verschlüsselung übernimmt culfw intern.
 
@@ -71,17 +76,18 @@ def log_rts_frame(
         )
 
 # Somfy RTS ctrl-Nibble-Werte (High-Nibble von Byte 1, laut Protokoll-Spec)
+# Schlüssel = Schicht-2-Begriffe (RTS-Protokoll): UP, DOWN, MY, PROG, MY_UP, MY_DOWN
 RTS_CTRL_NIBBLE: dict[str, int] = {
-    "OPEN":    0x2,  # Auf / Hoch
-    "CLOSE":   0x4,  # Ab / Runter
-    "STOP":    0x1,  # My / Stop
+    "UP":      0x2,  # Hochfahren / Einfahren (Rollladen hoch, Markise ein)
+    "DOWN":    0x4,  # Runterfahren / Ausfahren (Rollladen runter, Markise aus)
+    "MY":      0x1,  # MY / Stop
     "PROG":    0x8,  # Programmiermodus (Anlern-Wizard)
-    "MY_UP":   0x3,  # My + Auf
-    "MY_DOWN": 0x5,  # My + Ab
+    "MY_UP":   0x3,  # MY + Hoch (Jalousie)
+    "MY_DOWN": 0x5,  # MY + Runter (Jalousie)
 }
 
 # Telegram-Byte-Werte: ctrl ins High-Nibble schieben, cks=0 (culfw berechnet cks intern)
-# Byte 1 = (ctrl << 4) | cks  →  OPEN: 0x2<<4 = 0x20, CLOSE: 0x4<<4 = 0x40, ...
+# Byte 1 = (ctrl << 4) | cks  →  UP: 0x2<<4 = 0x20, DOWN: 0x4<<4 = 0x40, MY: 0x1<<4 = 0x10, ...
 RTS_CMD: dict[str, int] = {k: v << 4 for k, v in RTS_CTRL_NIBBLE.items()}
 
 
@@ -94,14 +100,16 @@ def build_rts_sequence(address: str, action: str, device_name: str = "") -> RTSS
 
     Args:
         address:     6-stellige Hex-Adresse des virtuellen Senders (z.B. "A1B2C3")
-        action:      Befehl: "OPEN", "CLOSE", "STOP", "PROG", "MY_UP", "MY_DOWN"
+        action:      Schicht-2-Befehl: "UP", "DOWN", "MY", "PROG", "MY_UP", "MY_DOWN"
+                     (Schicht-1-Befehle OPEN/CLOSE/STOP müssen vorher via
+                     resolve_rts_action() übersetzt werden)
         device_name: Optionaler Gerätename für somfy_codes.json
 
     Returns:
         RTSSequence mit commands ["Yr1", "YsA0..."] und RC-Metadaten für den Frame-Logger.
 
     Raises:
-        ValueError: Bei unbekanntem action-Wert.
+        ValueError: Bei unbekanntem action-Wert (Schicht-2-Prüfung).
     """
     cmd_byte = RTS_CMD.get(action.upper())
     if cmd_byte is None:
@@ -115,12 +123,11 @@ def build_rts_sequence(address: str, action: str, device_name: str = "") -> RTSS
     telegram = f"YsA0{cmd_byte:02X}{rolling_code:04X}{address.upper()}"
 
     logger.info(
-        "RTS: '%s' | Aktion=%-8s | Byte1=0x%02X (ctrl=0x%X) | RC=%5d (0x%04X) | → %s",
+        "RTS: '%s' | %-7s | Byte1=0x%02X (ctrl=0x%X) | RC=%d | %s",
         device_name or address,
         action,
         cmd_byte,
         cmd_byte >> 4,
-        rolling_code,
         rolling_code,
         telegram,
     )

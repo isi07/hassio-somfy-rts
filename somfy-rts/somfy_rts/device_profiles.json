@@ -1,14 +1,14 @@
 {
   "awning": {
-    "_comment": "Markise: Physikalisch verifiziert (Telis-FB): Pfeil ↓ = Ausfahren = RTS CLOSE (ctrl 0x4). Pfeil ↑ = Einfahren = RTS OPEN (ctrl 0x2). Umgekehrt zum Rollladen! command_map gilt fuer Modus A (HA Cover-Befehle OPEN/CLOSE werden vor dem Senden uebersetzt). Modus B nutzt das rts-Feld der buttons direkt.",
+    "_comment": "Markise: Physikalisch verifiziert (Telis-FB). Pfeil DOWN = Ausfahren = RTS DOWN (ctrl 0x4). Pfeil UP = Einfahren = RTS UP (ctrl 0x2). Umgekehrt zum Rollladen! command_map uebersetzt HA-Semantik (Schicht 1) in RTS-Protokoll (Schicht 2) fuer Modus A. Modus B injiziert Schicht-2-Befehle direkt via rts-Feld.",
     "device_class": "awning",
     "icon": "mdi:awning",
     "my_buttons": "my",
-    "command_map": {"OPEN": "CLOSE", "CLOSE": "OPEN"},
+    "command_map": {"OPEN": "DOWN", "CLOSE": "UP", "STOP": "MY"},
     "buttons": {
-      "open":  {"rts": "CLOSE", "label": "Ausfahren", "icon": "mdi:arrow-down-circle"},
-      "close": {"rts": "OPEN",  "label": "Einfahren", "icon": "mdi:arrow-up-circle"},
-      "stop":  {"rts": "STOP",  "label": "Stop",      "icon": "mdi:stop-circle"}
+      "open":  {"rts": "DOWN", "label": "Ausfahren", "icon": "mdi:arrow-down-circle"},
+      "close": {"rts": "UP",   "label": "Einfahren", "icon": "mdi:arrow-up-circle"},
+      "stop":  {"rts": "MY",   "label": "Stop",      "icon": "mdi:stop-circle"}
     },
     "default_travel_time_open": 35,
     "default_travel_time_close": 38
@@ -17,10 +17,11 @@
     "device_class": "shutter",
     "icon": "mdi:window-shutter",
     "my_buttons": "my",
+    "command_map": {"OPEN": "UP", "CLOSE": "DOWN", "STOP": "MY"},
     "buttons": {
-      "open":  {"rts": "OPEN",  "label": "Hochfahren",  "icon": "mdi:arrow-up-circle"},
-      "close": {"rts": "CLOSE", "label": "Runterfahren", "icon": "mdi:arrow-down-circle"},
-      "stop":  {"rts": "STOP",  "label": "Stop",         "icon": "mdi:stop-circle"}
+      "open":  {"rts": "UP",   "label": "Hochfahren",   "icon": "mdi:arrow-up-circle"},
+      "close": {"rts": "DOWN", "label": "Runterfahren", "icon": "mdi:arrow-down-circle"},
+      "stop":  {"rts": "MY",   "label": "Stop",         "icon": "mdi:stop-circle"}
     },
     "default_travel_time_open": 20,
     "default_travel_time_close": 22
@@ -29,10 +30,13 @@
     "device_class": "blind",
     "icon": "mdi:blinds",
     "my_buttons": "my_full",
+    "command_map": {"OPEN": "UP", "CLOSE": "DOWN", "STOP": "MY"},
     "buttons": {
-      "open":  {"rts": "OPEN",  "label": "Öffnen",    "icon": "mdi:arrow-up-circle"},
-      "close": {"rts": "CLOSE", "label": "Schließen", "icon": "mdi:arrow-down-circle"},
-      "stop":  {"rts": "STOP",  "label": "Stop",      "icon": "mdi:stop-circle"}
+      "open":  {"rts": "UP",      "label": "Auf", "icon": "mdi:arrow-up-circle"},
+      "close": {"rts": "DOWN",    "label": "Zu",  "icon": "mdi:arrow-down-circle"},
+      "stop":  {"rts": "MY",      "label": "Stop","icon": "mdi:stop-circle"},
+      "my_up":   {"rts": "MY_UP",   "label": "MY Auf",    "icon": "mdi:arrow-up-bold-circle"},
+      "my_down": {"rts": "MY_DOWN", "label": "MY Runter", "icon": "mdi:arrow-down-bold-circle"}
     },
     "default_travel_time_open": 15,
     "default_travel_time_close": 16
@@ -41,10 +45,11 @@
     "device_class": "shade",
     "icon": "mdi:roller-shade",
     "my_buttons": "my",
+    "command_map": {"OPEN": "UP", "CLOSE": "DOWN", "STOP": "MY"},
     "buttons": {
-      "open":  {"rts": "OPEN",  "label": "Hochfahren",  "icon": "mdi:arrow-up-circle"},
-      "close": {"rts": "CLOSE", "label": "Runterfahren", "icon": "mdi:arrow-down-circle"},
-      "stop":  {"rts": "STOP",  "label": "Stop",         "icon": "mdi:stop-circle"}
+      "open":  {"rts": "UP",   "label": "Auf", "icon": "mdi:arrow-up-circle"},
+      "close": {"rts": "DOWN", "label": "Zu",  "icon": "mdi:arrow-down-circle"},
+      "stop":  {"rts": "MY",   "label": "Stop","icon": "mdi:stop-circle"}
     },
     "default_travel_time_open": 30,
     "default_travel_time_close": 32
@@ -53,10 +58,11 @@
     "device_class": "gate",
     "icon": "mdi:gate",
     "my_buttons": "my",
+    "command_map": {"OPEN": "UP", "CLOSE": "DOWN", "STOP": "MY"},
     "buttons": {
-      "open":  {"rts": "OPEN",  "label": "Öffnen",    "icon": "mdi:gate-open"},
-      "close": {"rts": "CLOSE", "label": "Schließen", "icon": "mdi:gate"},
-      "stop":  {"rts": "STOP",  "label": "Stop",      "icon": "mdi:stop-circle"}
+      "open":  {"rts": "UP",   "label": "Auf", "icon": "mdi:gate-open"},
+      "close": {"rts": "DOWN", "label": "Zu",  "icon": "mdi:gate"},
+      "stop":  {"rts": "MY",   "label": "Stop","icon": "mdi:stop-circle"}
     },
     "default_travel_time_open": 15,
     "default_travel_time_close": 15
@@ -65,10 +71,11 @@
     "device_class": null,
     "icon": "mdi:lightbulb",
     "my_buttons": "none",
+    "command_map": {"OPEN": "UP", "CLOSE": "DOWN", "STOP": "MY"},
     "buttons": {
-      "open":  {"rts": "OPEN",  "label": "Ein",  "icon": "mdi:lightbulb-on"},
-      "close": {"rts": "CLOSE", "label": "Aus",  "icon": "mdi:lightbulb-off"},
-      "stop":  {"rts": "STOP",  "label": "Stop", "icon": "mdi:stop-circle"}
+      "open":  {"rts": "UP",   "label": "Auf", "icon": "mdi:lightbulb-on"},
+      "close": {"rts": "DOWN", "label": "Zu",  "icon": "mdi:lightbulb-off"},
+      "stop":  {"rts": "MY",   "label": "Stop","icon": "mdi:stop-circle"}
     },
     "default_travel_time_open": 5,
     "default_travel_time_close": 5
@@ -77,10 +84,11 @@
     "device_class": null,
     "icon": "mdi:radiator",
     "my_buttons": "none",
+    "command_map": {"OPEN": "UP", "CLOSE": "DOWN", "STOP": "MY"},
     "buttons": {
-      "open":  {"rts": "OPEN",  "label": "Ein",  "icon": "mdi:radiator"},
-      "close": {"rts": "CLOSE", "label": "Aus",  "icon": "mdi:radiator-off"},
-      "stop":  {"rts": "STOP",  "label": "Stop", "icon": "mdi:stop-circle"}
+      "open":  {"rts": "UP",   "label": "Auf", "icon": "mdi:radiator"},
+      "close": {"rts": "DOWN", "label": "Zu",  "icon": "mdi:radiator-off"},
+      "stop":  {"rts": "MY",   "label": "Stop","icon": "mdi:stop-circle"}
     },
     "default_travel_time_open": 5,
     "default_travel_time_close": 5

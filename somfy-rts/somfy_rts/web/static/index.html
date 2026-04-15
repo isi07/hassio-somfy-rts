@@ -111,15 +111,17 @@ const TYPE_LABEL = {
   screen:"Rollo", gate:"Tor", light:"Licht", heater:"Heizung"
 };
 const CMD_LABELS = {
-  // Markise: OPEN=Ausfahren (Tuch raus → physikalisch ↓), CLOSE=Einfahren (Tuch rein → physikalisch ↑)
-  // Umgekehrt zur Rollladen-Logik — RTS-Kommandos bleiben unverändert, nur Pfeilrichtung angepasst
+  // Markise: OPEN-Button = Ausfahren ↓ (RTS DOWN), CLOSE-Button = Einfahren ↑ (RTS UP)
+  // Physikalisch umgekehrt zum Rollladen — WebUI sendet OPEN/CLOSE (Schicht 1), api.py übersetzt
   awning: {up:"Ausfahren",  dn:"Einfahren",    up_arrow:"▼", dn_arrow:"▲", my_buttons:"my"},
+  // Rollladen: OPEN-Button = Hochfahren ↑ (RTS UP), CLOSE-Button = Runterfahren ↓ (RTS DOWN)
   shutter:{up:"Hochfahren", dn:"Runterfahren", my_buttons:"my"},
-  blind:  {up:"Öffnen",    dn:"Schließen",    my_buttons:"my_full"},
-  screen: {up:"Hochfahren", dn:"Runterfahren", my_buttons:"my"},
-  gate:   {up:"Öffnen",    dn:"Schließen",    my_buttons:"my"},
-  light:  {up:"Ein",       dn:"Aus",          my_buttons:"none"},
-  heater: {up:"Ein",       dn:"Aus",          my_buttons:"none"},
+  // Alle anderen: OPEN-Button = Auf ↑, CLOSE-Button = Zu ↓
+  blind:  {up:"Auf",        dn:"Zu",           my_buttons:"my_full"},
+  screen: {up:"Auf",        dn:"Zu",           my_buttons:"my"},
+  gate:   {up:"Auf",        dn:"Zu",           my_buttons:"my"},
+  light:  {up:"Auf",        dn:"Zu",           my_buttons:"none"},
+  heater: {up:"Auf",        dn:"Zu",           my_buttons:"none"},
 };
 
 async function apiFetch(path, opts) {

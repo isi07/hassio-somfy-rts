@@ -60,26 +60,30 @@ def _load_profiles() -> Dict[str, Any]:
 
 
 def resolve_rts_action(action: str, device_type: str) -> str:
-    """Übersetzt einen semantischen HA-Befehl in den tatsächlich zu sendenden RTS-Befehl.
+    """Übersetzt einen HA-Semantik-Befehl (Schicht 1) in einen RTS-Protokoll-Befehl (Schicht 2).
 
-    Wendet die command_map aus device_profiles.json an — nur für OPEN und CLOSE,
-    da STOP/PROG/MY_* gerätetyp-unabhängig immer direkt gesendet werden.
+    Schicht 1 (HA-Semantik):   OPEN, CLOSE, STOP, PROG, MY_UP, MY_DOWN
+    Schicht 2 (RTS-Protokoll): UP,   DOWN,  MY,   PROG, MY_UP, MY_DOWN
 
-    Beispiel awning: OPEN → CLOSE (Ausfahren), CLOSE → OPEN (Einfahren).
-    Für Gerätetypen ohne command_map (z.B. shutter) wird action unverändert zurückgegeben.
+    Wendet command_map aus device_profiles.json an:
+      Standard (shutter, blind, …): OPEN→UP, CLOSE→DOWN, STOP→MY
+      Awning:                        OPEN→DOWN, CLOSE→UP, STOP→MY
+
+    PROG, MY_UP, MY_DOWN sind in beiden Schichten identisch → werden direkt durchgereicht.
 
     Wird von Device._handle_command() (Modus A) UND vom REST-API-Endpunkt genutzt,
     damit WebUI und MQTT-Cover identisches Verhalten haben.
+    Modus B injiziert Schicht-2-Befehle bereits direkt → NICHT durch diese Funktion.
 
     Args:
-        action:      Semantischer HA-Befehl ("OPEN", "CLOSE", "STOP", …).
+        action:      HA-Semantik-Befehl (Schicht 1) oder Schicht-2-Begriff (wird durchgereicht).
         device_type: Gerätetyp-Schlüssel aus device_profiles.json (z.B. "awning").
 
     Returns:
-        RTS-Befehl, der tatsächlich an build_rts_sequence() übergeben werden soll.
+        Schicht-2-Befehl für build_rts_sequence().
     """
-    if action not in ("OPEN", "CLOSE"):
-        return action  # STOP/PROG/MY_* sind immer direkt — kein Mapping nötig
+    if action not in ("OPEN", "CLOSE", "STOP"):
+        return action  # PROG/MY_UP/MY_DOWN: Schicht 1 = Schicht 2
     profiles = _load_profiles()
     profile = profiles.get(device_type, {})
     return profile.get("command_map", {}).get(action, action)
@@ -123,19 +127,24 @@ class Device:
         )
 
     def _handle_command(self, command: str) -> None:
-        """Verarbeitet MQTT-Befehl: Rolling Code atomar persistieren → RTS senden → Status melden.
+        """Verarbeitet einen Befehl: Rolling Code atomar persistieren → RTS senden → Status melden.
 
-        Mode A: HA sendet OPEN/CLOSE → wird ggf. per command_map aus dem Profil übersetzt
-                (z.B. awning: OPEN→CLOSE, CLOSE→OPEN). Mode B überspringt die Übersetzung,
-                weil dort das rts-Feld im Profil den RTS-Befehl bereits korrekt festlegt.
+        Akzeptiert Schicht-1-Begriffe (OPEN/CLOSE/STOP — von Modus A MQTT-Cover)
+        sowie Schicht-2-Begriffe (UP/DOWN/MY/MY_UP/MY_DOWN/PROG — von Modus B Buttons).
+
+        Modus A: Schicht 1 → resolve_rts_action() → Schicht 2 → build_rts_sequence()
+        Modus B: Schicht-2-Begriff direkt aus rts-Feld des Profils → build_rts_sequence()
         """
         command = command.upper()
-        if command not in {"OPEN", "CLOSE", "STOP", "PROG", "MY_UP", "MY_DOWN"}:
+        # Layer 1 (Schicht 1, HA-Semantik):  OPEN, CLOSE, STOP  → wird per command_map übersetzt
+        # Layer 2 (Schicht 2, RTS-Protokoll): UP, DOWN, MY       → direkt (Mode B, MY_*, PROG)
+        _VALID = {"OPEN", "CLOSE", "STOP", "UP", "DOWN", "MY", "PROG", "MY_UP", "MY_DOWN"}
+        if command not in _VALID:
             logger.warning("Unbekannter Befehl '%s' für '%s'.", command, self._device.name)
             return
 
-        # Mode A: OPEN/CLOSE ggf. per resolve_rts_action() übersetzen (z.B. awning OPEN↔CLOSE)
-        # Mode B: rts-Feld im Profil hat die Übersetzung bereits übernommen → kein zweites Mapping
+        # Mode A: Schicht-1-Befehle via resolve_rts_action() in Schicht 2 übersetzen
+        # Mode B: mqtt_client injiziert bereits Schicht-2-Begriffe (rts-Feld im Profil) → kein Mapping
         if self._device.mode == "A":
             rts_action = resolve_rts_action(command, self._device.type)
         else:

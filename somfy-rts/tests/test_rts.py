@@ -1,4 +1,11 @@
-"""Tests for rts.py — culfw telegram builder."""
+"""Tests for rts.py — culfw telegram builder.
+
+build_rts_sequence() only accepts Layer-2 (RTS protocol) action names:
+  UP, DOWN, MY, PROG, MY_UP, MY_DOWN
+
+Layer-1 (HA semantics) names (OPEN, CLOSE, STOP) must be translated first
+via resolve_rts_action() in device.py before reaching this module.
+"""
 
 import re
 import pytest
@@ -12,35 +19,35 @@ def isolated_codes(tmp_codes_path):  # noqa: PT004 — side-effect fixture
 class TestTelegramFormat:
     def test_returns_two_commands(self, tmp_codes_path):
         from somfy_rts.rts import build_rts_sequence
-        seq = build_rts_sequence("A1B2C3", "OPEN")
+        seq = build_rts_sequence("A1B2C3", "UP")
         assert len(seq.commands) == 2
 
     def test_first_command_is_yr1(self, tmp_codes_path):
         from somfy_rts.rts import build_rts_sequence
-        seq = build_rts_sequence("A1B2C3", "OPEN")
+        seq = build_rts_sequence("A1B2C3", "UP")
         assert seq.commands[0] == "Yr1"
 
     def test_telegram_starts_with_ysa0(self, tmp_codes_path):
         from somfy_rts.rts import build_rts_sequence
-        seq = build_rts_sequence("A1B2C3", "OPEN")
+        seq = build_rts_sequence("A1B2C3", "UP")
         assert seq.frame.startswith("YsA0")
 
     def test_telegram_structure(self, tmp_codes_path):
         """YsA0 + CMD(2) + RC(4) + ADDR(6) = 16 chars total."""
         from somfy_rts.rts import build_rts_sequence
-        seq = build_rts_sequence("A1B2C3", "OPEN")
+        seq = build_rts_sequence("A1B2C3", "UP")
         # YsA0 = 4, CMD = 2, RC = 4, ADDR = 6 → total 16
         assert len(seq.frame) == 16
         assert re.fullmatch(r"YsA0[0-9A-F]{12}", seq.frame), seq.frame
 
     def test_address_is_uppercase_in_telegram(self, tmp_codes_path):
         from somfy_rts.rts import build_rts_sequence
-        seq = build_rts_sequence("a1b2c3", "OPEN")
+        seq = build_rts_sequence("a1b2c3", "UP")
         assert seq.frame.endswith("A1B2C3")
 
     def test_address_length_six_chars(self, tmp_codes_path):
         from somfy_rts.rts import build_rts_sequence
-        seq = build_rts_sequence("A1B2C3", "OPEN")
+        seq = build_rts_sequence("A1B2C3", "UP")
         assert seq.frame[-6:] == "A1B2C3"
 
 
@@ -50,26 +57,28 @@ class TestCmdBytes:
 
         Per Somfy RTS protocol: Byte 1 = (ctrl << 4) | cks.
         ctrl is the command nibble in the HIGH nibble; culfw fills cks.
-        So OPEN ctrl=0x2 → Byte 1 = 0x20, CLOSE ctrl=0x4 → 0x40, etc.
+          UP   ctrl=0x2 → Byte 1 = 0x20
+          DOWN ctrl=0x4 → Byte 1 = 0x40
+          MY   ctrl=0x1 → Byte 1 = 0x10
         """
         return telegram[4:6]
 
-    def test_open_cmd_byte_is_20(self, tmp_codes_path):
-        """OPEN: ctrl=0x2 → Byte 1 = 0x20 (ctrl in high nibble)."""
+    def test_up_cmd_byte_is_20(self, tmp_codes_path):
+        """UP: ctrl=0x2 → Byte 1 = 0x20 (ctrl in high nibble)."""
         from somfy_rts.rts import build_rts_sequence
-        seq = build_rts_sequence("A00001", "OPEN")
+        seq = build_rts_sequence("A00001", "UP")
         assert self._cmd_from_telegram(seq.frame) == "20"
 
-    def test_close_cmd_byte_is_40(self, tmp_codes_path):
-        """CLOSE: ctrl=0x4 → Byte 1 = 0x40."""
+    def test_down_cmd_byte_is_40(self, tmp_codes_path):
+        """DOWN: ctrl=0x4 → Byte 1 = 0x40."""
         from somfy_rts.rts import build_rts_sequence
-        seq = build_rts_sequence("A00001", "CLOSE")
+        seq = build_rts_sequence("A00001", "DOWN")
         assert self._cmd_from_telegram(seq.frame) == "40"
 
-    def test_stop_cmd_byte_is_10(self, tmp_codes_path):
-        """STOP: ctrl=0x1 → Byte 1 = 0x10."""
+    def test_my_cmd_byte_is_10(self, tmp_codes_path):
+        """MY: ctrl=0x1 → Byte 1 = 0x10."""
         from somfy_rts.rts import build_rts_sequence
-        seq = build_rts_sequence("A00001", "STOP")
+        seq = build_rts_sequence("A00001", "MY")
         assert self._cmd_from_telegram(seq.frame) == "10"
 
     def test_prog_cmd_byte_is_80(self, tmp_codes_path):
@@ -90,13 +99,31 @@ class TestCmdBytes:
         seq = build_rts_sequence("A00001", "MY_DOWN")
         assert self._cmd_from_telegram(seq.frame) == "50"
 
+    def test_layer1_open_raises_value_error(self, tmp_codes_path):
+        """Layer-1 name 'OPEN' is rejected — must be translated to 'UP' first."""
+        from somfy_rts.rts import build_rts_sequence
+        with pytest.raises(ValueError, match="Unbekannter RTS-Befehl"):
+            build_rts_sequence("A00001", "OPEN")
+
+    def test_layer1_close_raises_value_error(self, tmp_codes_path):
+        """Layer-1 name 'CLOSE' is rejected — must be translated to 'DOWN' first."""
+        from somfy_rts.rts import build_rts_sequence
+        with pytest.raises(ValueError, match="Unbekannter RTS-Befehl"):
+            build_rts_sequence("A00001", "CLOSE")
+
+    def test_layer1_stop_raises_value_error(self, tmp_codes_path):
+        """Layer-1 name 'STOP' is rejected — must be translated to 'MY' first."""
+        from somfy_rts.rts import build_rts_sequence
+        with pytest.raises(ValueError, match="Unbekannter RTS-Befehl"):
+            build_rts_sequence("A00001", "STOP")
+
     def test_unknown_action_raises_value_error(self, tmp_codes_path):
         from somfy_rts.rts import build_rts_sequence
         with pytest.raises(ValueError, match="Unbekannter RTS-Befehl"):
             build_rts_sequence("A00001", "FLY")
 
     def test_action_is_case_insensitive(self, tmp_codes_path):
-        """Lowercase 'open' maps to same byte (0x20) as uppercase 'OPEN'."""
+        """Lowercase 'up' maps to same byte (0x20) as uppercase 'UP'."""
         from somfy_rts.rts import build_rts_sequence
-        seq = build_rts_sequence("A00001", "open")
+        seq = build_rts_sequence("A00001", "up")
         assert self._cmd_from_telegram(seq.frame) == "20"

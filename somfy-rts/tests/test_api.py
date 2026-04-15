@@ -104,14 +104,15 @@ async def test_send_command_open(client, ctx, tmp_codes_path):
     assert resp.status == 200
     data = await resp.json()
     assert data["status"] == "sent"
-    assert data["action"] == "OPEN"
+    # Response reports Layer-2 action (OPEN→UP after command_map for shutter)
+    assert data["action"] == "UP"
     # SimGateway must have received exactly two commands: Yr1 + YsA0...
     assert ctx.gateway.sent_commands[0] == "Yr1"
     assert ctx.gateway.sent_commands[1].startswith("YsA0")
 
 
-async def test_send_command_awning_open_sends_rts_close(client, ctx, tmp_codes_path):
-    """REST API: awning OPEN → command_map → RTS CLOSE (Ausfahren = ctrl 0x4 = 0x40)."""
+async def test_send_command_awning_open_sends_rts_down(client, ctx, tmp_codes_path):
+    """REST API: awning OPEN → command_map → Layer-2 DOWN (Ausfahren = ctrl 0x4 = 0x40)."""
     import somfy_rts.rolling_code as rc
     store = rc._load()
     store["devices"].append({
@@ -126,15 +127,15 @@ async def test_send_command_awning_open_sends_rts_close(client, ctx, tmp_codes_p
     )
     assert resp.status == 200
     data = await resp.json()
-    # Response reports the actual RTS action sent (CLOSE after command_map)
-    assert data["action"] == "CLOSE"
-    # Telegram Byte1 must be 0x40 (CLOSE ctrl=0x4 shifted to high nibble)
+    # Response reports Layer-2 action (DOWN after command_map for awning)
+    assert data["action"] == "DOWN"
+    # Telegram Byte1 must be 0x40 (DOWN ctrl=0x4 shifted to high nibble)
     telegram = ctx.gateway.sent_commands[1]
-    assert telegram[4:6] == "40", f"Expected 0x40 (CLOSE), got {telegram[4:6]!r}: {telegram}"
+    assert telegram[4:6] == "40", f"Expected 0x40 (DOWN), got {telegram[4:6]!r}: {telegram}"
 
 
-async def test_send_command_awning_close_sends_rts_open(client, ctx, tmp_codes_path):
-    """REST API: awning CLOSE → command_map → RTS OPEN (Einfahren = ctrl 0x2 = 0x20)."""
+async def test_send_command_awning_close_sends_rts_up(client, ctx, tmp_codes_path):
+    """REST API: awning CLOSE → command_map → Layer-2 UP (Einfahren = ctrl 0x2 = 0x20)."""
     import somfy_rts.rolling_code as rc
     store = rc._load()
     store["devices"].append({
@@ -149,13 +150,13 @@ async def test_send_command_awning_close_sends_rts_open(client, ctx, tmp_codes_p
     )
     assert resp.status == 200
     data = await resp.json()
-    assert data["action"] == "OPEN"
+    assert data["action"] == "UP"
     telegram = ctx.gateway.sent_commands[1]
-    assert telegram[4:6] == "20", f"Expected 0x20 (OPEN), got {telegram[4:6]!r}: {telegram}"
+    assert telegram[4:6] == "20", f"Expected 0x20 (UP), got {telegram[4:6]!r}: {telegram}"
 
 
-async def test_send_command_awning_stop_unchanged(client, ctx, tmp_codes_path):
-    """REST API: awning STOP is not in command_map and passes through unchanged."""
+async def test_send_command_awning_stop_sends_rts_my(client, ctx, tmp_codes_path):
+    """REST API: awning STOP → command_map → Layer-2 MY (ctrl 0x1 = 0x10)."""
     import somfy_rts.rolling_code as rc
     store = rc._load()
     store["devices"].append({
@@ -170,13 +171,13 @@ async def test_send_command_awning_stop_unchanged(client, ctx, tmp_codes_path):
     )
     assert resp.status == 200
     data = await resp.json()
-    assert data["action"] == "STOP"
+    assert data["action"] == "MY"
     telegram = ctx.gateway.sent_commands[1]
-    assert telegram[4:6] == "10", f"Expected 0x10 (STOP), got {telegram[4:6]!r}: {telegram}"
+    assert telegram[4:6] == "10", f"Expected 0x10 (MY), got {telegram[4:6]!r}: {telegram}"
 
 
-async def test_send_command_shutter_open_unchanged(client, ctx, tmp_codes_path):
-    """REST API: shutter has no command_map — OPEN stays OPEN (0x20), no regression."""
+async def test_send_command_shutter_open_maps_to_up(client, ctx, tmp_codes_path):
+    """REST API: shutter OPEN → command_map → UP (0x20)."""
     import somfy_rts.rolling_code as rc
     store = rc._load()
     store["devices"].append({
@@ -191,7 +192,7 @@ async def test_send_command_shutter_open_unchanged(client, ctx, tmp_codes_path):
     )
     assert resp.status == 200
     data = await resp.json()
-    assert data["action"] == "OPEN"
+    assert data["action"] == "UP"
     telegram = ctx.gateway.sent_commands[1]
     assert telegram[4:6] == "20"
 
