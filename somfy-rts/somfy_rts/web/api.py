@@ -31,7 +31,7 @@ from aiohttp import web
 
 from .. import __version__
 from ..config import Config, DeviceConfig
-from ..device import Device
+from ..device import Device, resolve_rts_action
 from ..gateway import BaseGateway, SimGateway
 from ..mqtt_client import MQTTClient
 from ..rolling_code import _load, _save_atomic
@@ -223,8 +223,16 @@ async def send_command(request: web.Request) -> web.Response:
     if not ctx.gateway.is_connected:
         raise web.HTTPServiceUnavailable(reason="Gateway nicht verbunden.")
 
+    # Semantischen Befehl per command_map in RTS-Aktion übersetzen (z.B. awning OPEN↔CLOSE).
+    # Entspricht dem Verhalten von Device._handle_command() im Modus A, damit WebUI und
+    # MQTT-Cover identisch reagieren.
+    device_type = device.get("device_type", "shutter")
+    rts_action = resolve_rts_action(action, device_type)
+    if rts_action != action:
+        logger.info("API: %s %s → RTS %s (command_map)", addr, action, rts_action)
+
     try:
-        seq = build_rts_sequence(addr, action, device.get("name", ""))
+        seq = build_rts_sequence(addr, rts_action, device.get("name", ""))
     except ValueError as exc:
         raise web.HTTPBadRequest(reason=str(exc)) from exc
 
@@ -232,14 +240,14 @@ async def send_command(request: web.Request) -> web.Response:
         for cmd in seq.commands:
             ctx.gateway.send_raw(cmd)
     except Exception as exc:
-        logger.error("Sendefehler %s → %s: %s", addr, action, exc)
-        log_rts_frame(seq, addr, action, success=False, error=str(exc))
+        logger.error("Sendefehler %s → %s: %s", addr, rts_action, exc)
+        log_rts_frame(seq, addr, rts_action, success=False, error=str(exc))
         raise web.HTTPInternalServerError(reason=str(exc)) from exc
 
-    log_rts_frame(seq, addr, action, success=True)
+    log_rts_frame(seq, addr, rts_action, success=True)
 
-    logger.info("API: %s → %s gesendet.", addr, action)
-    return web.json_response({"status": "sent", "action": action, "address": addr})
+    logger.info("API: %s → %s gesendet.", addr, rts_action)
+    return web.json_response({"status": "sent", "action": rts_action, "address": addr})
 
 
 @routes.delete("/api/devices/{id}")

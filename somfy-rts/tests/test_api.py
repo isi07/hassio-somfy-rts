@@ -110,6 +110,92 @@ async def test_send_command_open(client, ctx, tmp_codes_path):
     assert ctx.gateway.sent_commands[1].startswith("YsA0")
 
 
+async def test_send_command_awning_open_sends_rts_close(client, ctx, tmp_codes_path):
+    """REST API: awning OPEN → command_map → RTS CLOSE (Ausfahren = ctrl 0x4 = 0x40)."""
+    import somfy_rts.rolling_code as rc
+    store = rc._load()
+    store["devices"].append({
+        "address": "A00002", "name": "Markise", "rolling_code": 0, "device_type": "awning",
+    })
+    rc._save_atomic(store)
+
+    resp = await client.post(
+        "/api/devices/A00002/cmd",
+        data=json.dumps({"action": "OPEN"}),
+        headers={"Content-Type": "application/json"},
+    )
+    assert resp.status == 200
+    data = await resp.json()
+    # Response reports the actual RTS action sent (CLOSE after command_map)
+    assert data["action"] == "CLOSE"
+    # Telegram Byte1 must be 0x40 (CLOSE ctrl=0x4 shifted to high nibble)
+    telegram = ctx.gateway.sent_commands[1]
+    assert telegram[4:6] == "40", f"Expected 0x40 (CLOSE), got {telegram[4:6]!r}: {telegram}"
+
+
+async def test_send_command_awning_close_sends_rts_open(client, ctx, tmp_codes_path):
+    """REST API: awning CLOSE → command_map → RTS OPEN (Einfahren = ctrl 0x2 = 0x20)."""
+    import somfy_rts.rolling_code as rc
+    store = rc._load()
+    store["devices"].append({
+        "address": "A00003", "name": "Markise2", "rolling_code": 0, "device_type": "awning",
+    })
+    rc._save_atomic(store)
+
+    resp = await client.post(
+        "/api/devices/A00003/cmd",
+        data=json.dumps({"action": "CLOSE"}),
+        headers={"Content-Type": "application/json"},
+    )
+    assert resp.status == 200
+    data = await resp.json()
+    assert data["action"] == "OPEN"
+    telegram = ctx.gateway.sent_commands[1]
+    assert telegram[4:6] == "20", f"Expected 0x20 (OPEN), got {telegram[4:6]!r}: {telegram}"
+
+
+async def test_send_command_awning_stop_unchanged(client, ctx, tmp_codes_path):
+    """REST API: awning STOP is not in command_map and passes through unchanged."""
+    import somfy_rts.rolling_code as rc
+    store = rc._load()
+    store["devices"].append({
+        "address": "A00004", "name": "Markise3", "rolling_code": 0, "device_type": "awning",
+    })
+    rc._save_atomic(store)
+
+    resp = await client.post(
+        "/api/devices/A00004/cmd",
+        data=json.dumps({"action": "STOP"}),
+        headers={"Content-Type": "application/json"},
+    )
+    assert resp.status == 200
+    data = await resp.json()
+    assert data["action"] == "STOP"
+    telegram = ctx.gateway.sent_commands[1]
+    assert telegram[4:6] == "10", f"Expected 0x10 (STOP), got {telegram[4:6]!r}: {telegram}"
+
+
+async def test_send_command_shutter_open_unchanged(client, ctx, tmp_codes_path):
+    """REST API: shutter has no command_map — OPEN stays OPEN (0x20), no regression."""
+    import somfy_rts.rolling_code as rc
+    store = rc._load()
+    store["devices"].append({
+        "address": "A00005", "name": "Rollladen", "rolling_code": 0, "device_type": "shutter",
+    })
+    rc._save_atomic(store)
+
+    resp = await client.post(
+        "/api/devices/A00005/cmd",
+        data=json.dumps({"action": "OPEN"}),
+        headers={"Content-Type": "application/json"},
+    )
+    assert resp.status == 200
+    data = await resp.json()
+    assert data["action"] == "OPEN"
+    telegram = ctx.gateway.sent_commands[1]
+    assert telegram[4:6] == "20"
+
+
 async def test_send_command_unknown_action(client, tmp_codes_path):
     import somfy_rts.rolling_code as rc
     store = rc._load()

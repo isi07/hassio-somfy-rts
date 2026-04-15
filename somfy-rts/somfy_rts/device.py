@@ -59,6 +59,32 @@ def _load_profiles() -> Dict[str, Any]:
         return {}
 
 
+def resolve_rts_action(action: str, device_type: str) -> str:
+    """Übersetzt einen semantischen HA-Befehl in den tatsächlich zu sendenden RTS-Befehl.
+
+    Wendet die command_map aus device_profiles.json an — nur für OPEN und CLOSE,
+    da STOP/PROG/MY_* gerätetyp-unabhängig immer direkt gesendet werden.
+
+    Beispiel awning: OPEN → CLOSE (Ausfahren), CLOSE → OPEN (Einfahren).
+    Für Gerätetypen ohne command_map (z.B. shutter) wird action unverändert zurückgegeben.
+
+    Wird von Device._handle_command() (Modus A) UND vom REST-API-Endpunkt genutzt,
+    damit WebUI und MQTT-Cover identisches Verhalten haben.
+
+    Args:
+        action:      Semantischer HA-Befehl ("OPEN", "CLOSE", "STOP", …).
+        device_type: Gerätetyp-Schlüssel aus device_profiles.json (z.B. "awning").
+
+    Returns:
+        RTS-Befehl, der tatsächlich an build_rts_sequence() übergeben werden soll.
+    """
+    if action not in ("OPEN", "CLOSE"):
+        return action  # STOP/PROG/MY_* sind immer direkt — kein Mapping nötig
+    profiles = _load_profiles()
+    profile = profiles.get(device_type, {})
+    return profile.get("command_map", {}).get(action, action)
+
+
 class Device:
     """Repräsentiert ein einzelnes Somfy RTS Gerät — unabhängig vom Typ.
 
@@ -108,10 +134,10 @@ class Device:
             logger.warning("Unbekannter Befehl '%s' für '%s'.", command, self._device.name)
             return
 
-        # Mode A: OPEN/CLOSE ggf. per command_map übersetzen (z.B. awning invertiert OPEN↔CLOSE)
+        # Mode A: OPEN/CLOSE ggf. per resolve_rts_action() übersetzen (z.B. awning OPEN↔CLOSE)
         # Mode B: rts-Feld im Profil hat die Übersetzung bereits übernommen → kein zweites Mapping
-        if self._device.mode == "A" and command in ("OPEN", "CLOSE"):
-            rts_action = self._profile.get("command_map", {}).get(command, command)
+        if self._device.mode == "A":
+            rts_action = resolve_rts_action(command, self._device.type)
         else:
             rts_action = command
 

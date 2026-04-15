@@ -115,3 +115,35 @@ class TestShutterCommandMap:
         sent = [c.args[0] for c in gw.send_raw.call_args_list]
         telegram = sent[1]
         assert telegram[4:6] == "40"
+
+
+class TestResolveRtsAction:
+    """Unit tests for the public resolve_rts_action() helper."""
+
+    def test_awning_open_maps_to_close(self):
+        from somfy_rts.device import resolve_rts_action
+        assert resolve_rts_action("OPEN", "awning") == "CLOSE"
+
+    def test_awning_close_maps_to_open(self):
+        from somfy_rts.device import resolve_rts_action
+        assert resolve_rts_action("CLOSE", "awning") == "OPEN"
+
+    def test_awning_stop_unchanged(self):
+        from somfy_rts.device import resolve_rts_action
+        assert resolve_rts_action("STOP", "awning") == "STOP"
+
+    def test_awning_prog_unchanged(self):
+        from somfy_rts.device import resolve_rts_action
+        assert resolve_rts_action("PROG", "awning") == "PROG"
+
+    def test_shutter_open_unchanged(self):
+        from somfy_rts.device import resolve_rts_action
+        assert resolve_rts_action("OPEN", "shutter") == "OPEN"
+
+    def test_shutter_close_unchanged(self):
+        from somfy_rts.device import resolve_rts_action
+        assert resolve_rts_action("CLOSE", "shutter") == "CLOSE"
+
+    def test_unknown_type_passthrough(self):
+        from somfy_rts.device import resolve_rts_action
+        assert resolve_rts_action("OPEN", "unknown_type") == "OPEN"
