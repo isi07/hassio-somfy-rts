@@ -412,6 +412,28 @@ class TestImportDevice:
         )
         assert resp.status == 400
 
+    async def test_import_mode_b_success(self, client, tmp_codes_path):
+        """Importing with mode='B' returns HTTP 201 and mode B in response."""
+        resp = await client.post(
+            "/api/devices/import",
+            data=json.dumps({"name": "Jalousie Modus B", "device_type": "blind",
+                             "address": "D00001", "rolling_code": 5, "mode": "B"}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 201
+        data = await resp.json()
+        assert data["mode"] == "B"
+
+    async def test_import_invalid_mode_400(self, client, tmp_codes_path):
+        """Unknown mode is rejected with 400."""
+        resp = await client.post(
+            "/api/devices/import",
+            data=json.dumps({"name": "X", "device_type": "shutter",
+                             "address": "A1B2C3", "rolling_code": 1, "mode": "C"}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 400
+
     async def test_import_device_appears_in_device_list(self, client, tmp_codes_path):
         """After import, GET /api/devices lists the new device."""
         await client.post(

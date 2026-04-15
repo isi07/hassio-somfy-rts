@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 
 _HEX_ADDR_RE = re.compile(r"^[0-9A-Fa-f]{6}$")
 _VALID_DEVICE_TYPES = {"awning", "shutter", "blind", "screen", "gate", "light", "heater"}
+_VALID_MODES = {"A", "B"}
 
 # ---------- AppContext ----------
 
@@ -124,6 +125,7 @@ async def import_device(request: web.Request) -> web.Response:
     device_type = str(data.get("device_type", "shutter")).strip().lower()
     address = str(data.get("address", "")).strip().upper()
     rolling_code_raw = data.get("rolling_code", None)
+    mode = str(data.get("mode", "A")).strip().upper()
 
     # --- Validation ---
     if not name:
@@ -145,6 +147,8 @@ async def import_device(request: web.Request) -> web.Response:
         raise web.HTTPBadRequest(reason="rolling_code muss eine ganze Zahl sein.")
     if rolling_code < 0:
         raise web.HTTPBadRequest(reason="rolling_code muss >= 0 sein.")
+    if mode not in _VALID_MODES:
+        raise web.HTTPBadRequest(reason=f"Ungültiger Modus: {mode!r}. Erlaubt: A, B")
 
     # --- Persist via ioBroker-import logic ---
     PairingWizard.import_from_iobroker(
@@ -152,22 +156,23 @@ async def import_device(request: web.Request) -> web.Response:
         device_type=device_type,
         address=address,
         rolling_code=rolling_code,
+        mode=mode,
     )
 
     # --- Publish MQTT Discovery immediately (no restart required) ---
     if ctx.mqtt_client is not None:
-        device_cfg = DeviceConfig(name=name, type=device_type, address=address, mode="A")
+        device_cfg = DeviceConfig(name=name, type=device_type, address=address, mode=mode)
         dev = Device(device_cfg, ctx.gateway, ctx.mqtt_client)
         dev.setup()
 
-    logger.info("Import: '%s' Adresse=%s RC=%d Typ=%s", name, address, rolling_code, device_type)
+    logger.info("Import: '%s' Adresse=%s RC=%d Typ=%s Modus=%s", name, address, rolling_code, device_type, mode)
     return web.json_response(
         {
             "name": name,
             "type": device_type,
             "address": address,
             "rolling_code": rolling_code,
-            "mode": "A",
+            "mode": mode,
         },
         status=201,
     )
@@ -285,11 +290,14 @@ async def wizard_start(request: web.Request) -> web.Response:
 
     name = str(data.get("name", "")).strip()
     device_type = str(data.get("device_type", "shutter"))
+    mode = str(data.get("mode", "A")).strip().upper()
     if not name:
         raise web.HTTPBadRequest(reason="Name ist erforderlich.")
+    if mode not in _VALID_MODES:
+        raise web.HTTPBadRequest(reason=f"Ungültiger Modus: {mode!r}. Erlaubt: A, B")
 
     ctx.wizard = PairingWizard(ctx.gateway, ctx.config.address_prefix)
-    addr = ctx.wizard.start(name, device_type)
+    addr = ctx.wizard.start(name, device_type, mode)
     return web.json_response({"state": "ADDR_READY", "address": addr})
 
 

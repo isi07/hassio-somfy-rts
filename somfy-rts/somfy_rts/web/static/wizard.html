@@ -60,6 +60,14 @@
           <option value="heater">Heizung</option>
         </select>
       </div>
+      <div class="form-group">
+        <label for="dev-mode">MQTT-Modus</label>
+        <select id="dev-mode">
+          <option value="A" selected>A — Cover-Entity (optimistisch)</option>
+          <option value="B">B — Buttons + Sensoren (Template Cover)</option>
+        </select>
+        <div class="form-hint">Modus A: direkte Steuerung über eine Cover-Entity. Modus B: drei Buttons + Diagnose-Sensoren für Template Cover mit Blueprint.</div>
+      </div>
       <div id="step1-err" class="alert alert-err hidden"></div>
       <div class="flex gap mt-lg">
         <button class="btn btn-primary w-full" id="btn-start">Weiter →</button>
@@ -186,12 +194,13 @@ function hideErr(id) { document.getElementById(id).classList.add("hidden"); }
 document.getElementById("btn-start").addEventListener("click", async () => {
   const name = document.getElementById("dev-name").value.trim();
   const type = document.getElementById("dev-type").value;
+  const mode = document.getElementById("dev-mode").value;
   hideErr("step1-err");
   if (!name) { showErr("step1-err", "Bitte einen Namen eingeben."); return; }
   try {
     const data = await apiFetch("/api/wizard/start", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({name, device_type: type})
+      body: JSON.stringify({name, device_type: type, mode})
     });
     generatedAddr = data.address;
     document.getElementById("gen-address").textContent = generatedAddr;
@@ -232,7 +241,7 @@ document.getElementById("btn-confirm").addEventListener("click", async () => {
     document.getElementById("result-ok").classList.remove("hidden");
     document.getElementById("result-err").classList.add("hidden");
     document.getElementById("result-device-info").textContent =
-      `${data.device.name} | Adresse: ${data.device.address} | Typ: ${data.device.type}`;
+      `${data.device.name} | Adresse: ${data.device.address} | Typ: ${data.device.type} | Modus: ${data.device.mode}`;
     showStep(5);
   } catch(e) {
     showErr("step4-err", "Fehler: " + e.message);

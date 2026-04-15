@@ -18,8 +18,8 @@ Jalousien usw.) über einen **NanoCUL USB-Stick** mit **culfw-Firmware** via **M
 
 | Komponente | Details |
 |---|---|
-| App Runtime | Docker (baseimage: `ghcr.io/home-assistant/amd64-base-python:3.11`) |
-| Sprache | Python 3.11 |
+| App Runtime | Docker (baseimage: `ghcr.io/home-assistant/amd64-base-python:3.12`) |
+| Sprache | Python 3.12 |
 | Protokoll | Somfy RTS (433,42 MHz) über NanoCUL USB (culfw) |
 | Kommunikation | MQTT (Paho) → Home Assistant |
 | HA-Integration | MQTT Discovery (Cover/Button-Entitäten) |
@@ -77,7 +77,13 @@ ignoriert Telegramme mit repeat>1.
   ```json
   {
     "devices": [
-      {"address": "A1B2C3", "name": "Wohnzimmer", "rolling_code": 42}
+      {
+        "address": "A1B2C3",
+        "name": "Wohnzimmer",
+        "rolling_code": 42,
+        "device_type": "shutter",
+        "mode": "A"
+      }
     ],
     "groups": [],
     "settings": {
@@ -86,6 +92,7 @@ ignoriert Telegramme mit repeat>1.
     }
   }
   ```
+- `mode`: `"A"` = Cover-Entity (optimistisch), `"B"` = 3 Buttons + 2 Diagnose-Sensoren
 - **KRITISCH:** Rolling Code wird **atomar** (tempfile + `os.replace()`) gespeichert
   **BEVOR** der RTS-Befehl gesendet wird. Strom-Ausfallsicherheit.
 - 16-Bit Rollover (0 → 65535 → 0)
@@ -118,7 +125,7 @@ hassio-somfy-rts/
 │       ├── config.py                  # Liest /data/options.json
 │       ├── gateway.py                 # BaseGateway (ABC) + CULGateway
 │       ├── rolling_code.py            # Atomare RC-Persistenz (/data/somfy_codes.json)
-│       ├── rts.py                     # build_rts_sequence() — culfw-Befehlsbau
+│       ├── rts.py                     # build_rts_sequence() → RTSSequence, log_rts_frame()
 │       ├── mqtt_client.py             # MQTT + HA Discovery (Modus A/B, LWT, Origin)
 │       ├── device.py                  # Device-Klasse (alle 7 Typen, Modus A/B)
 │       ├── wizard.py                  # PairingWizard (5-Schritt Anlern-Flow)
@@ -193,7 +200,9 @@ Geräte werden **nicht** in `config.yaml` verwaltet, sondern in `/data/somfy_cod
     {
       "address": "A1B2C3",
       "name": "Wohnzimmer Markise",
-      "rolling_code": 42
+      "rolling_code": 42,
+      "device_type": "shutter",
+      "mode": "A"
     }
   ]
 }
@@ -282,14 +291,58 @@ Erstellt ein Template Cover für Rollläden:
 
 Der `PairingWizard` steuert den 5-stufigen Anlern-Flow:
 
-1. `wizard.start(name, device_type)` — Adresse generieren, RC auf 0 setzen, in `somfy_codes.json` voranlegen
+1. `wizard.start(name, device_type, mode="A")` — Adresse generieren, RC auf 0 setzen, in `somfy_codes.json` voranlegen (inkl. `mode`-Feld)
 2. Motor in Programmiermodus versetzen (Orig.-FB PROG 3s halten → kurzes Auf-Ab)
 3. `wizard.send_prog()` — PROG-Telegramm (cmd=0x8) via CUL senden
 4. Operator sieht Motor-Bestätigungsbewegung → `wizard.confirm()` aufrufen
-5. `wizard.get_device_config()` — Config-Dict für `options.json`-Geräteliste zurückgeben
+5. `wizard.get_device_config()` — Config-Dict zurückgeben (enthält `mode`)
 
-**ioBroker-Import:** `PairingWizard.import_from_iobroker(name, type, address, rolling_code)`  
+**Modus A/B** ist in der Web-UI wählbar: Anlern-Wizard (Schritt 1) und Import-Dialog
+bieten je ein Dropdown — `A` = Cover-Entity, `B` = Buttons + Sensoren für Blueprint.
+
+**ioBroker-Import:** `PairingWizard.import_from_iobroker(name, type, address, rolling_code, mode="A")`  
 Rolling Code muss ≥ letzter ioBroker-Wert sein (Sicherheitsmarge +10 empfohlen).
+Auch hier ist `mode` ein optionaler Parameter (`"A"` oder `"B"`).
+
+### REST-Endpunkt: `POST /api/devices/import`
+
+Für Geräte, die bereits via ioBroker oder einer anderen App gepaart wurden:
+
+```json
+{
+  "name": "Carport Markise",
+  "device_type": "awning",
+  "address": "A1B2C3",
+  "rolling_code": 42,
+  "mode": "A"
+}
+```
+
+- Antwort: HTTP 201 + Device-Dict (inkl. `mode`)
+- Validierung: Name, Adresse (6 Hex-Zeichen), RC ≥ 0, `device_type` aus Whitelist, `mode` ∈ {A, B}
+- Publiziert MQTT Discovery sofort (kein Neustart nötig)
+
+### `rts.py` — `RTSSequence` und Frame-Logging
+
+`build_rts_sequence()` gibt einen `RTSSequence`-Dataclass zurück:
+
+```python
+@dataclass
+class RTSSequence:
+    commands: list[str]   # ["Yr1", "YsA0..."]
+    frame: str            # telegram string
+    rc_before: int        # rolling code vor Inkrement
+    rc_after: int         # rolling code nach Inkrement (im Frame kodiert)
+```
+
+`log_rts_frame(seq, device_id, action, success, error="")` wird vom **Aufrufer** nach
+dem `send_raw()`-Loop aufgerufen — **nicht** innerhalb von `build_rts_sequence()`.
+`STATUS=OK` im Frame-Log bedeutet damit, dass das Telegramm wirklich gesendet wurde.
+
+### Gateway TX-Logging
+
+`CULGateway.send_raw()` und `SimGateway.send_raw()` loggen jeden gesendeten Befehl
+auf **`INFO`**-Level (`CUL TX: ...` bzw. `[SIM] TX: ...`), nicht mehr auf DEBUG.
 
 ---
 

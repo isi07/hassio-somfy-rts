@@ -52,6 +52,7 @@ class WizardSession:
     address: str = ""
     name: str = ""
     device_type: str = "shutter"
+    mode: str = "A"
     state: WizardState = WizardState.IDLE
     prog_sent_at: Optional[float] = None
     error: str = ""
@@ -76,13 +77,13 @@ class PairingWizard:
 
     # ---------- Step 1 / 2: Start & address generation ----------
 
-    def start(self, name: str, device_type: str = "shutter") -> str:
+    def start(self, name: str, device_type: str = "shutter", mode: str = "A") -> str:
         """Generate a new unique address and initialize rolling code at 0.
 
         Returns the generated 6-char hex address.
         Prefix is locked in somfy_codes.json after first call.
         """
-        self._session = WizardSession(name=name, device_type=device_type)
+        self._session = WizardSession(name=name, device_type=device_type, mode=mode.upper())
 
         address = self._next_address(name)
         self._session.address = address
@@ -169,7 +170,7 @@ class PairingWizard:
             "name": self._session.name,
             "type": self._session.device_type,
             "address": self._session.address,
-            "mode": "A",
+            "mode": self._session.mode,
         }
 
     # ---------- ioBroker import ----------
@@ -180,6 +181,7 @@ class PairingWizard:
         device_type: str,
         address: str,
         rolling_code: int,
+        mode: str = "A",
     ) -> dict:
         """Import a device already paired via ioBroker — no re-pairing needed.
 
@@ -191,27 +193,30 @@ class PairingWizard:
             device_type:  One of: awning, shutter, blind, screen, gate, light, heater.
             address:      6-char hex address as used in ioBroker (e.g. "A1B2C3").
             rolling_code: Last rolling code value from ioBroker (add a safety margin of ~10).
+            mode:         Discovery mode: "A" = Cover entity, "B" = Buttons + sensors.
 
         Returns:
             Config dict ready for insertion into options.json devices list.
         """
         addr = address.upper()
+        mode_upper = mode.upper()
         store = _load()
         entry = _find_or_create_device(store, addr, name)
         entry["rolling_code"] = int(rolling_code)
+        entry["mode"] = mode_upper
         if name:
             entry["name"] = name
         _save_atomic(store)
 
         logger.info(
-            "ioBroker import: '%s' Adresse=%s RC=%d gespeichert.",
-            name, addr, rolling_code,
+            "ioBroker import: '%s' Adresse=%s RC=%d Modus=%s gespeichert.",
+            name, addr, rolling_code, mode_upper,
         )
         return {
             "name": name,
             "type": device_type,
             "address": addr,
-            "mode": "A",
+            "mode": mode_upper,
         }
 
     # ---------- State helpers ----------
@@ -258,6 +263,7 @@ class PairingWizard:
         entry = _find_or_create_device(store, address, name)
         entry["rolling_code"] = 0
         entry["device_type"] = self._session.device_type
+        entry["mode"] = self._session.mode
         _save_atomic(store)
 
         return address

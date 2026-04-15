@@ -88,6 +88,14 @@
       <input type="number" id="imp-rc" placeholder="z. B. 42" min="0" max="65535">
       <div class="form-hint">Letzten bekannten Wert + Sicherheitsmarge (~10) eingeben</div>
     </div>
+    <div class="form-group">
+      <label for="imp-mode">MQTT-Modus</label>
+      <select id="imp-mode">
+        <option value="A" selected>A — Cover-Entity (optimistisch)</option>
+        <option value="B">B — Buttons + Sensoren (Template Cover)</option>
+      </select>
+      <div class="form-hint">Modus A: direkte Steuerung. Modus B: für Template Cover mit Blueprint.</div>
+    </div>
     <div id="imp-err" class="alert alert-err hidden"></div>
     <div id="imp-ok"  class="alert alert-ok  hidden"></div>
     <div class="flex gap mt-lg">
@@ -237,6 +245,7 @@ function openImportModal() {
   document.getElementById("imp-addr").value = "";
   document.getElementById("imp-rc").value   = "";
   document.getElementById("imp-type").value = "shutter";
+  document.getElementById("imp-mode").value = "A";
   document.getElementById("imp-err").classList.add("hidden");
   document.getElementById("imp-ok").classList.add("hidden");
   document.getElementById("btn-import-submit").disabled = false;
@@ -271,6 +280,7 @@ document.getElementById("btn-import-submit").addEventListener("click", async () 
   const type   = document.getElementById("imp-type").value;
   const addr   = document.getElementById("imp-addr").value.trim().toUpperCase();
   const rcRaw  = document.getElementById("imp-rc").value.trim();
+  const mode   = document.getElementById("imp-mode").value;
 
   // Client-side validation
   if (!name)                          { errEl.textContent = "Name darf nicht leer sein.";                  errEl.classList.remove("hidden"); return; }
@@ -284,7 +294,7 @@ document.getElementById("btn-import-submit").addEventListener("click", async () 
     const dev = await apiFetch("/api/devices/import", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({name, device_type: type, address: addr, rolling_code: Number(rcRaw)}),
+      body: JSON.stringify({name, device_type: type, address: addr, rolling_code: Number(rcRaw), mode}),
     });
     okEl.textContent = `✓ "${dev.name}" (${dev.address}) erfolgreich importiert.`;
     okEl.classList.remove("hidden");
