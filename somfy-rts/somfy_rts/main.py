@@ -6,7 +6,8 @@ import signal
 import sys
 
 from . import __version__
-from .config import load_config
+from .config import DeviceConfig, load_config
+from .device import Device
 from .gateway import CULGateway, GatewayError, SimGateway
 from .mqtt_client import MQTTClient
 from .rolling_code import _load as load_codes
@@ -91,8 +92,21 @@ async def _async_main() -> None:
 
     mqtt_client.register_gateway(gateway.port_name, device_count)
 
+    # Publish MQTT Discovery for all existing devices
+    devices: list[Device] = []
+    for dev_data in store.get("devices", []):
+        device_cfg = DeviceConfig(
+            name=dev_data.get("name", ""),
+            type=dev_data.get("device_type", "shutter"),
+            address=dev_data.get("address", ""),
+            mode=dev_data.get("mode", "A"),
+        )
+        dev = Device(device_cfg, gateway, mqtt_client)
+        dev.setup()
+        devices.append(dev)
+
     # Build app context and start Web UI
-    ctx = AppContext(gateway=gateway, config=config)
+    ctx = AppContext(gateway=gateway, config=config, mqtt_client=mqtt_client)
     ctx.attach_log_handler()
 
     runner = await start_server(WEB_HOST, WEB_PORT, ctx)

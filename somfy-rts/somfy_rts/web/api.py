@@ -28,8 +28,10 @@ from typing import Optional
 from aiohttp import web
 
 from .. import __version__
-from ..config import Config
+from ..config import Config, DeviceConfig
+from ..device import Device
 from ..gateway import BaseGateway, SimGateway
+from ..mqtt_client import MQTTClient
 from ..rolling_code import _load, _save_atomic
 from ..rts import build_rts_sequence
 from ..wizard import PairingWizard
@@ -43,9 +45,15 @@ logger = logging.getLogger(__name__)
 class AppContext:
     """Shared application state passed to all API handlers via request.app['ctx']."""
 
-    def __init__(self, gateway: BaseGateway, config: Config) -> None:
+    def __init__(
+        self,
+        gateway: BaseGateway,
+        config: Config,
+        mqtt_client: Optional[MQTTClient] = None,
+    ) -> None:
         self.gateway = gateway
         self.config = config
+        self.mqtt_client = mqtt_client
         self.wizard: Optional[PairingWizard] = None
         self.log_buffer: deque[dict] = deque(maxlen=100)
 
@@ -228,6 +236,18 @@ async def wizard_confirm(request: web.Request) -> web.Response:
         cfg = ctx.wizard.get_device_config()
     except RuntimeError as exc:
         raise web.HTTPConflict(reason=str(exc)) from exc
+
+    # Publish MQTT Discovery immediately so the device appears in HA without restart
+    if ctx.mqtt_client is not None:
+        device_cfg = DeviceConfig(
+            name=cfg["name"],
+            type=cfg["type"],
+            address=cfg["address"],
+            mode=cfg.get("mode", "A"),
+        )
+        dev = Device(device_cfg, ctx.gateway, ctx.mqtt_client)
+        dev.setup()
+
     ctx.wizard = None
     return web.json_response({"state": "CONFIRMED", "device": cfg})
 
