@@ -1,5 +1,74 @@
 # CLAUDE.md — Somfy RTS Home Assistant App
 
+## Inhaltsverzeichnis
+
+- [⚠️ Kritische Invarianten](#kritische-invarianten--vor-jeder-änderung-lesen)
+- [Projektübersicht](#projektübersicht)
+- [Technischer Stack](#technischer-stack)
+- [Hardware](#hardware)
+- [culfw Befehlsformat](#culfw-befehlsformat-somfy-rts)
+- [Rolling Code Persistenz](#rolling-code-persistenz)
+- [Projektstruktur](#projektstruktur)
+- [Architektur](#architektur)
+- [Geräte-Modi](#geräte-modi)
+- [App-Konfigurationsoptionen](#app-konfigurationsoptionen)
+- [Gerätetypen](#gerätetypen-device_profilesjson)
+- [MQTT Topics](#mqtt-topics)
+- [Blueprints](#blueprints-ha-202411)
+- [CI/CD](#cicd-github-actions)
+- [Anlern-Wizard](#anlern-wizard-wizardpy)
+- [Dokumentationspflicht](#dokumentationspflicht)
+- [Code-Qualitätsstandards](#code-qualitätsstandards)
+- [Release-Prozess](#release-prozess-immer-in-dieser-reihenfolge)
+- [Interaction Protocol](#interaction-protocol)
+- [Do's / Don'ts](#dos--donts)
+- [Refactoring Checkliste](#refactoring-checkliste)
+- [Entwicklungs-Hinweise](#entwicklungs-hinweise)
+
+---
+
+## ⚠️ Kritische Invarianten — vor jeder Änderung lesen
+
+### 1 · Rolling Code Atomizität
+
+- RC wird **atomar** (`tempfile` + `os.replace()`) gespeichert **BEVOR** der RTS-Befehl gesendet wird
+- Reihenfolge: `RC speichern` → `Yr1 senden` → `YsA0… senden`
+- **NIEMALS** RC nach dem Senden speichern — bei Stromausfall dazwischen lässt sich der Motor nicht mehr steuern
+- **NIEMALS** direkt in `somfy_codes.json` schreiben ohne `os.replace()`
+
+```python
+# ❌ FALSCH — RC wird nach dem Senden gespeichert
+gateway.send_raw("Yr1")
+gateway.send_raw(telegram)
+save_rolling_code(rc)            # Stromausfall hier → RC desynchronisiert!
+
+# ✅ RICHTIG — RC atomar BEVOR dem Senden (rolling_code.py: get_and_increment)
+rc = get_and_increment(address)  # speichert atomar via tempfile + os.replace()
+telegram = f"YsA0{cmd:02X}{rc:04X}{address}"
+gateway.send_raw("Yr1")
+gateway.send_raw(telegram)
+```
+
+### 2 · Yr1 Pflicht-Kommando
+
+- `Yr1` **MUSS** immer **VOR** dem `YsA0…`-Telegramm gesendet werden
+- Centralis uno RTS ignoriert Telegramme ohne vorherigen `Yr1` — **kommentarlos, kein Fehler**
+- `build_rts_sequence()` gibt **immer** `["Yr1", telegram]` zurück — nie nur `[telegram]`
+- `log_rts_frame()` wird **nach** dem `send_raw()`-Loop aufgerufen — `STATUS=OK` bedeutet echt gesendet
+
+```python
+# ❌ FALSCH — Yr1 fehlt
+gateway.send_raw(telegram)        # Motor ignoriert das Telegramm stillschweigend!
+
+# ✅ RICHTIG — beide Kommandos aus RTSSequence.commands, log NACH dem Senden
+seq = build_rts_sequence(address, action, name)
+for cmd in seq.commands:          # ["Yr1", "YsA0..."]
+    gateway.send_raw(cmd)
+log_rts_frame(seq, address, action, success=True)   # erst hier: STATUS=OK ist echt
+```
+
+---
+
 ## Projektübersicht
 
 **Name:** hassio-somfy-rts  
@@ -469,6 +538,52 @@ Bei Änderungen an bestehenden Dateien: Type Hints und Docstrings nur für
 
 **NIEMALS** einen Tag setzen ohne vorher die Version in `config.yaml` aktualisiert zu haben.
 Tag und `config.yaml` version müssen **IMMER** übereinstimmen.
+
+---
+
+## Interaction Protocol
+
+1. **Approach zuerst** — Vor dem Coden den geplanten Ansatz kurz beschreiben (außer bei trivialen Änderungen < 5 Zeilen). Das verhindert unnötige Arbeit bei falschen Annahmen.
+2. **Anforderungen klären** — Unklares sofort fragen, nicht raten und nachträglich korrigieren.
+3. **Edge Cases nennen** — Nach jeder Implementierung: Was könnte schiefgehen? Welche Tests fehlen noch?
+4. **Bug Fix = Test zuerst** — Erst einen reproduzierenden Test schreiben, dann fixen, dann prüfen ob der Test grün ist.
+5. **Aus Korrekturen lernen** — Was war das Problem, warum ist es passiert, wie in Zukunft vermeiden?
+
+---
+
+## Do's / Don'ts
+
+### ✅ Do's
+
+- `Yr1` immer **vor** `YsA0…` senden — `build_rts_sequence()` macht das automatisch
+- RC **atomar** speichern (`tempfile` + `os.replace()`) **vor** dem Senden
+- `log_rts_frame()` **nach** `send_raw()` aufrufen
+- `pytest` nach jeder Änderung ausführen — alle Tests müssen grün bleiben
+- `CLAUDE.md` und `DOCS.md` im **gleichen Commit** wie Code-Änderungen aktualisieren
+- Approach kurz beschreiben bevor Code geschrieben wird
+- Type Hints für **geänderte** Funktionen ergänzen (nicht die ganze Datei umschreiben)
+
+### ❌ Don'ts
+
+- RC **nicht** nach dem Senden speichern
+- `Yr1` **nicht** weglassen
+- `log_rts_frame()` **nicht** vor `send_raw()` aufrufen (`STATUS=OK` wäre gelogen)
+- **Nicht** direkt in `somfy_codes.json` schreiben ohne atomares Speichern
+- **Kein** `print()` — immer `logging` verwenden
+- **Nicht** mit dem Coden anfangen bevor unklare Anforderungen geklärt sind
+- **Nie** einen Tag setzen ohne vorher `config.yaml` Version aktualisiert zu haben
+
+---
+
+## Refactoring Checkliste
+
+```
+□ pytest — alle Tests grün
+□ ruff check somfy_rts/ — keine Lint-Fehler
+□ CLAUDE.md aktualisiert (bei Struktur-/API-/Modul-Änderungen)
+□ DOCS.md aktualisiert (bei Feature-/Config-Änderungen)
+□ Code + Docs im gleichen Commit
+```
 
 ---
 
