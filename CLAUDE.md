@@ -378,7 +378,7 @@ Erstellt ein Template Cover für Rollläden:
 ## CI/CD (GitHub Actions)
 
 - **Lint (`ruff`):** Bei jedem PR und Tag
-- **Docker Build (amd64/aarch64/armv7):** Nur bei Tag-Push (`v*`)
+- **Docker Build (amd64/aarch64):** Nur bei Tag-Push (`v*`)
 - **Release:** Automatisch bei Tag, Changelog via git-cliff
 - **Conventional Commits:** `feat:`, `fix:`, `perf:`, `refactor:`, `docs:`, `chore:`, `ci:`
 - **Tag-Format:** `v0.1.0` (stable), `v0.1.0-beta.1` (pre-release)
