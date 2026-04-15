@@ -20,10 +20,51 @@ WICHTIG: Rolling Code wird ATOMAR persistiert BEVOR build_rts_sequence()
 """
 
 import logging
+from dataclasses import dataclass, field
 
 from .rolling_code import get_and_increment
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class RTSSequence:
+    """Result of build_rts_sequence() — culfw commands plus metadata for frame logging."""
+
+    commands: list[str]  # ["Yr1", "YsA0..."]
+    frame: str           # telegram string = commands[1]
+    rc_before: int       # rolling code before increment
+    rc_after: int        # rolling code after increment (value encoded in frame)
+
+
+def log_rts_frame(
+    seq: RTSSequence,
+    device_id: str,
+    action: str,
+    success: bool,
+    error: str = "",
+) -> None:
+    """Call rts_logger.log_frame() after the send_raw() loop completes.
+
+    Args:
+        seq:       RTSSequence returned by build_rts_sequence().
+        device_id: 6-char hex device address (e.g. "A1B2C3").
+        action:    Command string (e.g. "OPEN", "CLOSE").
+        success:   True if all send_raw() calls succeeded without exception.
+        error:     Exception message when success is False.
+    """
+    from .rts_logger import rts_logger  # noqa: PLC0415
+    if rts_logger is not None:
+        rts_logger.log_frame(
+            device_id=device_id.upper(),
+            cmd=action.upper(),
+            rc_before=seq.rc_before,
+            rc_after=seq.rc_after,
+            frame=seq.frame,
+            serial_bytes=(seq.frame + "\n").encode("ascii").hex(),
+            success=success,
+            error=error,
+        )
 
 # CMD-Bytes: 1 Byte = 2 Hex-Zeichen im Befehlsstring
 RTS_CMD: dict[str, int] = {
@@ -36,12 +77,12 @@ RTS_CMD: dict[str, int] = {
 }
 
 
-def build_rts_sequence(address: str, action: str, device_name: str = "") -> list[str]:
+def build_rts_sequence(address: str, action: str, device_name: str = "") -> RTSSequence:
     """Baut die culfw-Befehlssequenz für ein einzelnes RTS-Telegramm.
 
     Rolling Code wird ATOMAR in /data/somfy_codes.json gespeichert,
     bevor diese Funktion zurückkehrt. Der Aufrufer sendet die Befehle
-    sofort danach über das Gateway.
+    sofort danach über das Gateway und ruft log_rts_frame() auf.
 
     Args:
         address:     6-stellige Hex-Adresse des virtuellen Senders (z.B. "A1B2C3")
@@ -49,7 +90,7 @@ def build_rts_sequence(address: str, action: str, device_name: str = "") -> list
         device_name: Optionaler Gerätename für somfy_codes.json
 
     Returns:
-        ["Yr1", "YsA0<CMD><RC><ADDR>"] — beide Strings ohne Newline senden.
+        RTSSequence mit commands ["Yr1", "YsA0..."] und RC-Metadaten für den Frame-Logger.
 
     Raises:
         ValueError: Bei unbekanntem action-Wert.
@@ -75,18 +116,10 @@ def build_rts_sequence(address: str, action: str, device_name: str = "") -> list
         telegram,
     )
 
-    from .rts_logger import rts_logger  # noqa: PLC0415
-    if rts_logger is not None:
-        serial_bytes = (telegram + "\n").encode("ascii").hex()
-        rts_logger.log_frame(
-            device_id=address.upper(),
-            cmd=action.upper(),
-            rc_before=rc_before,
-            rc_after=rolling_code,
-            frame=telegram,
-            serial_bytes=serial_bytes,
-            success=True,
-        )
-
     # Yr1 MUSS vor dem Telegramm gesendet werden
-    return ["Yr1", telegram]
+    return RTSSequence(
+        commands=["Yr1", telegram],
+        frame=telegram,
+        rc_before=rc_before,
+        rc_after=rolling_code,
+    )

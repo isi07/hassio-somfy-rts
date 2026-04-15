@@ -96,7 +96,7 @@ class CULGateway(BaseGateway):
         if not self._serial or not self._serial.is_open:
             raise GatewayError("CUL nicht verbunden.")
         raw = (command + "\n").encode("ascii")
-        logger.debug("CUL TX: %r", raw)
+        logger.info("CUL TX: %s", command)
         self._serial.write(raw)
         self._serial.flush()
 
@@ -159,7 +159,7 @@ class SimGateway(BaseGateway):
         if not self._connected:
             raise GatewayError("SimGateway nicht verbunden.")
         self.sent_commands.append(command)
-        logger.debug("[SIM] TX: %r", command)
+        logger.info("[SIM] TX: %s", command)
 
     @property
     def is_connected(self) -> bool:

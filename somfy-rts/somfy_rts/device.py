@@ -17,6 +17,7 @@ from .gateway import BaseGateway, GatewayError
 from .mqtt_client import MQTTClient
 from .rolling_code import get_current
 from . import rts as rts_module
+from .rts import log_rts_frame
 
 logger = logging.getLogger(__name__)
 
@@ -95,15 +96,22 @@ class Device:
     def _send_rts(self, action: str) -> None:
         """Baut RTS-Sequenz (RC atomar persistiert) und sendet beide Befehle via Gateway."""
         try:
-            commands = rts_module.build_rts_sequence(
+            seq = rts_module.build_rts_sequence(
                 self._device.address, action, self._device.name
             )
-            for cmd in commands:
+        except ValueError as e:
+            logger.error("RTS-Protokollfehler bei '%s': %s", self._device.name, e)
+            return
+
+        try:
+            for cmd in seq.commands:
                 self._gateway.send_raw(cmd)
         except GatewayError as e:
             logger.error("Gateway-Fehler bei '%s': %s", self._device.name, e)
-        except ValueError as e:
-            logger.error("RTS-Protokollfehler bei '%s': %s", self._device.name, e)
+            log_rts_frame(seq, self._device.address, action, success=False, error=str(e))
+            return
+
+        log_rts_frame(seq, self._device.address, action, success=True)
 
     def _publish_diagnostics(self, last_command: str = "") -> None:
         """Modus B: Aktualisiert rolling_code und last_command Sensoren in HA."""

@@ -30,6 +30,7 @@ from .rolling_code import (
     _find_or_create_device,
 )
 from . import rts as rts_module
+from .rts import log_rts_frame
 
 logger = logging.getLogger(__name__)
 
@@ -107,23 +108,32 @@ class PairingWizard:
             )
 
         try:
-            commands = rts_module.build_rts_sequence(
+            seq = rts_module.build_rts_sequence(
                 self._session.address, "PROG", self._session.name
             )
-            for cmd in commands:
-                self._gateway.send_raw(cmd)
+        except ValueError as e:
+            self._session.state = WizardState.FAILED
+            self._session.error = str(e)
+            logger.error("Wizard FAILED: PROG Buildfehler: %s", e)
+            raise
 
-            self._session.state = WizardState.PROG_SENT
-            self._session.prog_sent_at = time.monotonic()
-            logger.info(
-                "Wizard PROG_SENT: PROG gesendet an %s — warte auf Motor-Bestätigung (%ds).",
-                self._session.address, PROG_TIMEOUT_S,
-            )
-        except (GatewayError, ValueError) as e:
+        try:
+            for cmd in seq.commands:
+                self._gateway.send_raw(cmd)
+        except GatewayError as e:
             self._session.state = WizardState.FAILED
             self._session.error = str(e)
             logger.error("Wizard FAILED: PROG Sendefehler: %s", e)
+            log_rts_frame(seq, self._session.address, "PROG", success=False, error=str(e))
             raise
+
+        log_rts_frame(seq, self._session.address, "PROG", success=True)
+        self._session.state = WizardState.PROG_SENT
+        self._session.prog_sent_at = time.monotonic()
+        logger.info(
+            "Wizard PROG_SENT: PROG gesendet an %s — warte auf Motor-Bestätigung (%ds).",
+            self._session.address, PROG_TIMEOUT_S,
+        )
 
     # ---------- Step 4: Confirm ----------
 

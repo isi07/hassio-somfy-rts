@@ -33,7 +33,7 @@ from ..device import Device
 from ..gateway import BaseGateway, SimGateway
 from ..mqtt_client import MQTTClient
 from ..rolling_code import _load, _save_atomic
-from ..rts import build_rts_sequence
+from ..rts import build_rts_sequence, log_rts_frame
 from ..wizard import PairingWizard
 
 routes = web.RouteTableDef()
@@ -143,12 +143,19 @@ async def send_command(request: web.Request) -> web.Response:
         raise web.HTTPServiceUnavailable(reason="Gateway nicht verbunden.")
 
     try:
-        commands = build_rts_sequence(addr, action, device.get("name", ""))
-        for cmd in commands:
+        seq = build_rts_sequence(addr, action, device.get("name", ""))
+    except ValueError as exc:
+        raise web.HTTPBadRequest(reason=str(exc)) from exc
+
+    try:
+        for cmd in seq.commands:
             ctx.gateway.send_raw(cmd)
     except Exception as exc:
         logger.error("Sendefehler %s → %s: %s", addr, action, exc)
+        log_rts_frame(seq, addr, action, success=False, error=str(exc))
         raise web.HTTPInternalServerError(reason=str(exc)) from exc
+
+    log_rts_frame(seq, addr, action, success=True)
 
     logger.info("API: %s → %s gesendet.", addr, action)
     return web.json_response({"status": "sent", "action": action, "address": addr})
