@@ -95,14 +95,46 @@ class MQTTClient:
     # ---------- Gateway Discovery ----------
 
     def register_gateway(self, port_name: str, device_count: int) -> None:
-        """Veröffentlicht HA Discovery für das Gateway-Gerät (4 Diagnose-Sensoren)."""
+        """Veröffentlicht HA Discovery für das Gateway-Gerät.
+
+        Verbindungsstatus: binary_sensor ohne availability-Block — liest LWT_TOPIC direkt,
+        bleibt in HA immer verfügbar und zeigt "Verbunden"/"Getrennt" statt "Nicht verfügbar".
+
+        Die drei anderen Diagnose-Sensoren (USB-Port, Geräte, SW-Version) haben einen
+        availability-Block und werden bei Offline auf "Nicht verfügbar" gesetzt.
+        """
         avail = _avail_block()
 
+        # Verbindungsstatus als binary_sensor — kein availability-Block, liest LWT direkt.
+        # Altes sensor-Topic (aus Vorversionen) wird gecleart um Duplikate zu vermeiden.
+        self._client.publish(
+            f"{HA_DISCOVERY}/sensor/somfy_rts_gw_status/config", "", retain=True
+        )
+        conn_payload: Dict = {
+            "name": "Verbindung",
+            "unique_id": "somfy_rts_gw_status",
+            "state_topic": LWT_TOPIC,
+            "payload_on": "online",
+            "payload_off": "offline",
+            "device_class": "connectivity",
+            "entity_category": "diagnostic",
+            "icon": "mdi:lan-connect",
+            "device": _GW_DEVICE,
+            "origin": ORIGIN,
+            # Kein availability-Block — Entität bleibt immer verfügbar,
+            # Status wechselt zwischen online/offline via LWT.
+        }
+        self._client.publish(
+            f"{HA_DISCOVERY}/binary_sensor/somfy_rts_gw_status/config",
+            json.dumps(conn_payload),
+            retain=True,
+        )
+
+        # Drei Diagnose-Sensoren mit availability (werden bei Offline unavailable)
         sensor_defs = [
-            ("status",       "Verbindung",   f"{GW_TOPIC_BASE}/status",       "mdi:lan-connect", None),
-            ("port",         "USB-Port",     f"{GW_TOPIC_BASE}/port",          "mdi:usb",         None),
-            ("device_count", "Geräte",       f"{GW_TOPIC_BASE}/device_count",  "mdi:counter",     None),
-            ("sw_version",   "SW-Version",   f"{GW_TOPIC_BASE}/sw_version",    "mdi:tag",         None),
+            ("port",         "USB-Port",    f"{GW_TOPIC_BASE}/port",         "mdi:usb",     None),
+            ("device_count", "Geräte",      f"{GW_TOPIC_BASE}/device_count", "mdi:counter", None),
+            ("sw_version",   "SW-Version",  f"{GW_TOPIC_BASE}/sw_version",   "mdi:tag",     None),
         ]
 
         for sensor_id, sensor_name, state_topic, icon, unit in sensor_defs:
@@ -121,8 +153,7 @@ class MQTTClient:
             disc_topic = f"{HA_DISCOVERY}/sensor/somfy_rts_gw_{sensor_id}/config"
             self._client.publish(disc_topic, json.dumps(payload), retain=True)
 
-        # Initiale Werte
-        self._client.publish(f"{GW_TOPIC_BASE}/status",       "Verbunden",       retain=True)
+        # Initiale Werte (LWT wird von connect() auf "online" gesetzt)
         self._client.publish(f"{GW_TOPIC_BASE}/port",         port_name,         retain=True)
         self._client.publish(f"{GW_TOPIC_BASE}/device_count", str(device_count), retain=True)
         self._client.publish(f"{GW_TOPIC_BASE}/sw_version",   __version__,       retain=True)

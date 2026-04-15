@@ -37,16 +37,21 @@ _COMMAND_DISPLAY: Dict[str, str] = {
     "MY_DOWN": "MY",
 }
 
+# Notfall-Fallback wenn device_profiles.json komplett fehlt oder unlesbar ist.
+# Spiegelt das shutter-Profil mit korrekten Schicht-2-Begriffen wider.
+# Normalerweise wird stattdessen profiles.get("shutter", _FALLBACK_PROFILE) genutzt.
 _FALLBACK_PROFILE: Dict[str, Any] = {
-    "device_class": None,
-    "icon": "mdi:remote",
+    "device_class": "shutter",
+    "icon": "mdi:window-shutter",
+    "my_buttons": "my",
+    "command_map": {"OPEN": "UP", "CLOSE": "DOWN", "STOP": "MY"},
     "buttons": {
-        "open":  {"rts": "OPEN",  "label": "Auf",  "icon": "mdi:arrow-up-circle"},
-        "close": {"rts": "CLOSE", "label": "Zu",   "icon": "mdi:arrow-down-circle"},
-        "stop":  {"rts": "STOP",  "label": "Stop", "icon": "mdi:stop-circle"},
+        "open":  {"rts": "UP",   "label": "Auf",  "icon": "mdi:arrow-up-circle"},
+        "close": {"rts": "DOWN", "label": "Zu",   "icon": "mdi:arrow-down-circle"},
+        "stop":  {"rts": "MY",   "label": "Stop", "icon": "mdi:stop-circle"},
     },
-    "default_travel_time_open": 30,
-    "default_travel_time_close": 30,
+    "default_travel_time_open": 20,
+    "default_travel_time_close": 22,
 }
 
 
@@ -103,7 +108,12 @@ class Device:
         self._gateway = gateway
         self._mqtt = mqtt
         profiles = _load_profiles()
-        self._profile = profiles.get(device_cfg.type, _FALLBACK_PROFILE)
+        # Bekannter Typ → Profil direkt. Unbekannter Typ → shutter-Profil aus JSON
+        # (hat korrekte command_map + Layer-2-rts-Felder). Letzter Ausweg: _FALLBACK_PROFILE.
+        self._profile = (
+            profiles.get(device_cfg.type)
+            or profiles.get("shutter", _FALLBACK_PROFILE)
+        )
         self._state = "stopped"
 
     def setup(self) -> None:
