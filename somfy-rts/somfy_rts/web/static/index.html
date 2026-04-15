@@ -5,6 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Somfy RTS</title>
 <link rel="stylesheet" href="./static/style.css">
+<style>
+.toolbar { display:flex; gap:.5rem; margin-bottom:.75rem; flex-wrap:wrap; }
+.modal-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.75);
+  z-index:200; display:flex; align-items:center; justify-content:center;
+}
+.modal-box {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); padding:1.5rem;
+  width:min(440px,92vw); box-shadow:var(--shadow);
+}
+.modal-title { font-size:1rem; font-weight:700; margin-bottom:1.1rem; }
+</style>
 </head>
 <body>
 
@@ -21,6 +34,12 @@
 </nav>
 
 <main>
+  <!-- Action toolbar — shown once loading completes -->
+  <div id="toolbar" class="toolbar hidden">
+    <a href="./wizard" class="btn btn-primary">+ Anlernen</a>
+    <button id="btn-import-open" class="btn btn-secondary">↑ Importieren</button>
+  </div>
+
   <div id="loading" class="empty-state">
     <div class="spinner"></div>
     <p class="mt text-dim">Lade Geräte…</p>
@@ -29,11 +48,54 @@
   <div id="empty-state" class="empty-state hidden">
     <div class="icon">🎛️</div>
     <p>Noch kein Gerät angelernt.</p>
-    <a href="./wizard" class="btn btn-primary">Gerät anlernen</a>
   </div>
 
   <div id="device-grid" class="device-grid hidden"></div>
 </main>
+
+<!-- Import Modal -->
+<div id="import-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-title">Gerät importieren</div>
+    <p class="text-dim text-sm" style="margin-bottom:1rem">
+      Für Geräte, die bereits mit einer anderen App (z.&nbsp;B. ioBroker) gepaart wurden.
+      Adresse und Rolling Code aus dem alten System eintragen.
+    </p>
+    <div class="form-group">
+      <label for="imp-name">Gerätename</label>
+      <input type="text" id="imp-name" placeholder="z. B. Wohnzimmer Markise" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label for="imp-type">Gerätetyp</label>
+      <select id="imp-type">
+        <option value="awning">Markise</option>
+        <option value="shutter" selected>Rollladen</option>
+        <option value="blind">Jalousie / Raffstore</option>
+        <option value="screen">Insektenschutzrollo</option>
+        <option value="gate">Garagentor / Einfahrtstor</option>
+        <option value="light">Somfy-Licht</option>
+        <option value="heater">Heizung</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="imp-addr">Adresse (6 Hex-Zeichen)</label>
+      <input type="text" id="imp-addr" placeholder="z. B. A1B2C3" maxlength="6"
+             autocomplete="off" style="font-family:var(--mono);text-transform:uppercase">
+      <div class="form-hint">3-Byte Hex-Adresse aus der alten App (z.&nbsp;B. ioBroker)</div>
+    </div>
+    <div class="form-group">
+      <label for="imp-rc">Rolling Code</label>
+      <input type="number" id="imp-rc" placeholder="z. B. 42" min="0" max="65535">
+      <div class="form-hint">Letzten bekannten Wert + Sicherheitsmarge (~10) eingeben</div>
+    </div>
+    <div id="imp-err" class="alert alert-err hidden"></div>
+    <div id="imp-ok"  class="alert alert-ok  hidden"></div>
+    <div class="flex gap mt-lg">
+      <button id="btn-import-cancel" class="btn btn-secondary w-full">Abbrechen</button>
+      <button id="btn-import-submit" class="btn btn-primary   w-full">Importieren</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const TYPE_LABEL = {
@@ -148,12 +210,16 @@ async function loadDevices() {
   const loading = document.getElementById("loading");
   const empty   = document.getElementById("empty-state");
   const grid    = document.getElementById("device-grid");
+  const toolbar = document.getElementById("toolbar");
   try {
     const data = await apiFetch("/api/devices");
     loading.classList.add("hidden");
+    toolbar.classList.remove("hidden");
     if (!data.devices || data.devices.length === 0) {
       empty.classList.remove("hidden");
+      grid.classList.add("hidden");
     } else {
+      empty.classList.add("hidden");
       grid.innerHTML = "";
       data.devices.forEach(d => grid.appendChild(renderDevice(d)));
       grid.classList.remove("hidden");
@@ -162,6 +228,75 @@ async function loadDevices() {
     loading.innerHTML = `<p class="text-err">Fehler: ${e.message}</p>`;
   }
 }
+
+// ---------- Import Modal ----------
+const importModal = document.getElementById("import-modal");
+
+function openImportModal() {
+  document.getElementById("imp-name").value = "";
+  document.getElementById("imp-addr").value = "";
+  document.getElementById("imp-rc").value   = "";
+  document.getElementById("imp-type").value = "shutter";
+  document.getElementById("imp-err").classList.add("hidden");
+  document.getElementById("imp-ok").classList.add("hidden");
+  document.getElementById("btn-import-submit").disabled = false;
+  importModal.classList.remove("hidden");
+  document.getElementById("imp-name").focus();
+}
+
+function closeImportModal() {
+  importModal.classList.add("hidden");
+}
+
+document.getElementById("btn-import-open").addEventListener("click", openImportModal);
+document.getElementById("btn-import-cancel").addEventListener("click", closeImportModal);
+
+// Close on backdrop click
+importModal.addEventListener("click", e => {
+  if (e.target === importModal) closeImportModal();
+});
+
+// Close on Escape
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && !importModal.classList.contains("hidden")) closeImportModal();
+});
+
+document.getElementById("btn-import-submit").addEventListener("click", async () => {
+  const errEl = document.getElementById("imp-err");
+  const okEl  = document.getElementById("imp-ok");
+  errEl.classList.add("hidden");
+  okEl.classList.add("hidden");
+
+  const name   = document.getElementById("imp-name").value.trim();
+  const type   = document.getElementById("imp-type").value;
+  const addr   = document.getElementById("imp-addr").value.trim().toUpperCase();
+  const rcRaw  = document.getElementById("imp-rc").value.trim();
+
+  // Client-side validation
+  if (!name)                          { errEl.textContent = "Name darf nicht leer sein.";                  errEl.classList.remove("hidden"); return; }
+  if (!/^[0-9A-Fa-f]{6}$/.test(addr)){ errEl.textContent = "Adresse muss genau 6 Hex-Zeichen sein.";      errEl.classList.remove("hidden"); return; }
+  if (rcRaw === "" || isNaN(Number(rcRaw)) || Number(rcRaw) < 0) {
+                                        errEl.textContent = "Rolling Code muss eine Zahl >= 0 sein.";      errEl.classList.remove("hidden"); return; }
+
+  const btn = document.getElementById("btn-import-submit");
+  btn.disabled = true;
+  try {
+    const dev = await apiFetch("/api/devices/import", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({name, device_type: type, address: addr, rolling_code: Number(rcRaw)}),
+    });
+    okEl.textContent = `✓ "${dev.name}" (${dev.address}) erfolgreich importiert.`;
+    okEl.classList.remove("hidden");
+    // Reload device list and close modal after brief delay
+    await loadDevices();
+    setTimeout(closeImportModal, 1400);
+  } catch(e) {
+    errEl.textContent = "Fehler: " + e.message;
+    errEl.classList.remove("hidden");
+    btn.disabled = false;
+  }
+});
 
 async function updateRollingCodes() {
   try {

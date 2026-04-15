@@ -291,3 +291,136 @@ async def test_get_logs_after_command(client, ctx, tmp_codes_path):
     resp = await client.get("/api/logs")
     data = await resp.json()
     assert len(data["entries"]) > 0
+
+
+# ---------- POST /api/devices/import ----------
+
+
+class TestImportDevice:
+    """Tests for POST /api/devices/import."""
+
+    async def test_import_success_201(self, client, tmp_codes_path):
+        """Valid import returns HTTP 201 and the device dict."""
+        resp = await client.post(
+            "/api/devices/import",
+            data=json.dumps({
+                "name": "Carport Markise",
+                "device_type": "awning",
+                "address": "A1B2C3",
+                "rolling_code": 42,
+            }),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 201
+        data = await resp.json()
+        assert data["name"] == "Carport Markise"
+        assert data["address"] == "A1B2C3"
+        assert data["rolling_code"] == 42
+        assert data["type"] == "awning"
+        assert data["mode"] == "A"
+
+    async def test_import_persists_to_codes_json(self, client, tmp_codes_path):
+        """After import the device appears in somfy_codes.json."""
+        import somfy_rts.rolling_code as rc
+        await client.post(
+            "/api/devices/import",
+            data=json.dumps({
+                "name": "Kellerfenster",
+                "device_type": "shutter",
+                "address": "B00042",
+                "rolling_code": 10,
+            }),
+            headers={"Content-Type": "application/json"},
+        )
+        store = rc._load()
+        addresses = [d["address"].upper() for d in store.get("devices", [])]
+        assert "B00042" in addresses
+
+    async def test_import_address_case_insensitive(self, client, tmp_codes_path):
+        """Lowercase address is accepted and normalised to uppercase."""
+        resp = await client.post(
+            "/api/devices/import",
+            data=json.dumps({
+                "name": "Test",
+                "device_type": "shutter",
+                "address": "a1b2c3",
+                "rolling_code": 0,
+            }),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 201
+        data = await resp.json()
+        assert data["address"] == "A1B2C3"
+
+    async def test_import_rolling_code_zero(self, client, tmp_codes_path):
+        """Rolling code 0 is valid."""
+        resp = await client.post(
+            "/api/devices/import",
+            data=json.dumps({"name": "X", "device_type": "shutter",
+                             "address": "C00001", "rolling_code": 0}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 201
+
+    async def test_import_missing_name_400(self, client, tmp_codes_path):
+        """Empty name is rejected with 400."""
+        resp = await client.post(
+            "/api/devices/import",
+            data=json.dumps({"name": "", "device_type": "shutter",
+                             "address": "A1B2C3", "rolling_code": 1}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 400
+
+    async def test_import_invalid_address_short_400(self, client, tmp_codes_path):
+        """Address shorter than 6 chars is rejected with 400."""
+        resp = await client.post(
+            "/api/devices/import",
+            data=json.dumps({"name": "X", "device_type": "shutter",
+                             "address": "A1B2", "rolling_code": 1}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 400
+
+    async def test_import_invalid_address_non_hex_400(self, client, tmp_codes_path):
+        """Address with non-hex characters is rejected with 400."""
+        resp = await client.post(
+            "/api/devices/import",
+            data=json.dumps({"name": "X", "device_type": "shutter",
+                             "address": "ZZZZZZ", "rolling_code": 1}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 400
+
+    async def test_import_negative_rolling_code_400(self, client, tmp_codes_path):
+        """Negative rolling code is rejected with 400."""
+        resp = await client.post(
+            "/api/devices/import",
+            data=json.dumps({"name": "X", "device_type": "shutter",
+                             "address": "A1B2C3", "rolling_code": -1}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 400
+
+    async def test_import_unknown_device_type_400(self, client, tmp_codes_path):
+        """Unknown device_type is rejected with 400."""
+        resp = await client.post(
+            "/api/devices/import",
+            data=json.dumps({"name": "X", "device_type": "spaceship",
+                             "address": "A1B2C3", "rolling_code": 1}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 400
+
+    async def test_import_device_appears_in_device_list(self, client, tmp_codes_path):
+        """After import, GET /api/devices lists the new device."""
+        await client.post(
+            "/api/devices/import",
+            data=json.dumps({"name": "Terrasse", "device_type": "awning",
+                             "address": "AABBCC", "rolling_code": 5}),
+            headers={"Content-Type": "application/json"},
+        )
+        resp = await client.get("/api/devices")
+        assert resp.status == 200
+        devices = (await resp.json())["devices"]
+        assert any(d["address"].upper() == "AABBCC" for d in devices)

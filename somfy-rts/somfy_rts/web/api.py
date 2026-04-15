@@ -4,6 +4,7 @@ Endpoints:
   GET  /api/status               → gateway + simulation status
   GET  /api/devices              → all devices from somfy_codes.json
   GET  /api/devices/{id}         → single device by address
+  POST /api/devices/import       → add device by known address + rolling code (no pairing)
   POST /api/devices/{id}/cmd     → send RTS command (OPEN/CLOSE/STOP/MY_UP/MY_DOWN)
   DELETE /api/devices/{id}       → remove device
 
@@ -22,6 +23,7 @@ Endpoints:
 
 import logging
 import pathlib
+import re
 from collections import deque
 from typing import Optional
 
@@ -38,6 +40,9 @@ from ..wizard import PairingWizard
 
 routes = web.RouteTableDef()
 logger = logging.getLogger(__name__)
+
+_HEX_ADDR_RE = re.compile(r"^[0-9A-Fa-f]{6}$")
+_VALID_DEVICE_TYPES = {"awning", "shutter", "blind", "screen", "gate", "light", "heater"}
 
 # ---------- AppContext ----------
 
@@ -97,6 +102,75 @@ async def get_devices(request: web.Request) -> web.Response:
     """Return all devices from somfy_codes.json."""
     store = _load()
     return web.json_response({"devices": store.get("devices", [])})
+
+
+@routes.post("/api/devices/import")
+async def import_device(request: web.Request) -> web.Response:
+    """Import a device by known address and rolling code — no radio pairing needed.
+
+    Use this when a device was previously paired via ioBroker or another system
+    and you know the 6-char hex address and the last rolling code value.
+
+    Body: {"name": "...", "device_type": "shutter", "address": "A1B2C3", "rolling_code": 42}
+    Returns: the new device dict, HTTP 201.
+    """
+    ctx: AppContext = request.app["ctx"]
+    try:
+        data = await request.json()
+    except Exception:
+        raise web.HTTPBadRequest(reason="Ungültiges JSON.")
+
+    name = str(data.get("name", "")).strip()
+    device_type = str(data.get("device_type", "shutter")).strip().lower()
+    address = str(data.get("address", "")).strip().upper()
+    rolling_code_raw = data.get("rolling_code", None)
+
+    # --- Validation ---
+    if not name:
+        raise web.HTTPBadRequest(reason="name darf nicht leer sein.")
+    if device_type not in _VALID_DEVICE_TYPES:
+        raise web.HTTPBadRequest(
+            reason=f"Unbekannter device_type: {device_type!r}. "
+                   f"Erlaubt: {sorted(_VALID_DEVICE_TYPES)}"
+        )
+    if not _HEX_ADDR_RE.match(address):
+        raise web.HTTPBadRequest(
+            reason="address muss genau 6 Hex-Zeichen sein (z.B. 'A1B2C3')."
+        )
+    if rolling_code_raw is None:
+        raise web.HTTPBadRequest(reason="rolling_code ist erforderlich.")
+    try:
+        rolling_code = int(rolling_code_raw)
+    except (TypeError, ValueError):
+        raise web.HTTPBadRequest(reason="rolling_code muss eine ganze Zahl sein.")
+    if rolling_code < 0:
+        raise web.HTTPBadRequest(reason="rolling_code muss >= 0 sein.")
+
+    # --- Persist via ioBroker-import logic ---
+    PairingWizard.import_from_iobroker(
+        name=name,
+        device_type=device_type,
+        address=address,
+        rolling_code=rolling_code,
+    )
+
+    # --- Publish MQTT Discovery immediately (no restart required) ---
+    if ctx.mqtt_client is not None:
+        device_cfg = DeviceConfig(name=name, type=device_type, address=address, mode="A")
+        dev = Device(device_cfg, ctx.gateway, ctx.mqtt_client)
+        dev.setup()
+
+    logger.info("Import: '%s' Adresse=%s RC=%d Typ=%s", name, address, rolling_code, device_type)
+    return web.json_response(
+        {
+            "name": name,
+            "type": device_type,
+            "address": address,
+            "rolling_code": rolling_code,
+            "mode": "A",
+        },
+        status=201,
+    )
 
 
 @routes.get("/api/devices/{id}")
