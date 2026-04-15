@@ -6,7 +6,11 @@ culfw Befehlsformat (433,42 MHz):
 
   Felder:
     A0    = festes culfw-Präfix (Timing/Flags)
-    CMD   = 1 Byte Hex (2 Zeichen), z.B. "02" für Auf
+    CMD   = 1 Byte Hex (2 Zeichen) = Byte 1 des Somfy-Frames
+            Byte 1 = (ctrl << 4) | cks
+            ctrl = Befehlsnibble (High-Nibble), z.B. 0x2 für OPEN
+            cks  = Prüfsummennibble (Low-Nibble), von culfw intern berechnet
+            → culfw erwartet ctrl im High-Nibble, cks=0; z.B. "20" für OPEN
     RC    = Rolling Code, 4 Hex-Zeichen (16-Bit Big-Endian)
     ADDR  = Geräteadresse, 6 Hex-Zeichen (3 Byte)
 
@@ -66,15 +70,19 @@ def log_rts_frame(
             error=error,
         )
 
-# CMD-Bytes: 1 Byte = 2 Hex-Zeichen im Befehlsstring
-RTS_CMD: dict[str, int] = {
-    "OPEN":     0x2,  # Auf / Hoch
-    "CLOSE":    0x4,  # Ab / Runter
-    "STOP":     0x1,  # My / Stop
-    "PROG":     0x8,  # Programmiermodus (Anlern-Wizard)
-    "MY_UP":    0x3,  # My + Auf
-    "MY_DOWN":  0x5,  # My + Ab
+# Somfy RTS ctrl-Nibble-Werte (High-Nibble von Byte 1, laut Protokoll-Spec)
+RTS_CTRL_NIBBLE: dict[str, int] = {
+    "OPEN":    0x2,  # Auf / Hoch
+    "CLOSE":   0x4,  # Ab / Runter
+    "STOP":    0x1,  # My / Stop
+    "PROG":    0x8,  # Programmiermodus (Anlern-Wizard)
+    "MY_UP":   0x3,  # My + Auf
+    "MY_DOWN": 0x5,  # My + Ab
 }
+
+# Telegram-Byte-Werte: ctrl ins High-Nibble schieben, cks=0 (culfw berechnet cks intern)
+# Byte 1 = (ctrl << 4) | cks  →  OPEN: 0x2<<4 = 0x20, CLOSE: 0x4<<4 = 0x40, ...
+RTS_CMD: dict[str, int] = {k: v << 4 for k, v in RTS_CTRL_NIBBLE.items()}
 
 
 def build_rts_sequence(address: str, action: str, device_name: str = "") -> RTSSequence:
@@ -107,10 +115,11 @@ def build_rts_sequence(address: str, action: str, device_name: str = "") -> RTSS
     telegram = f"YsA0{cmd_byte:02X}{rolling_code:04X}{address.upper()}"
 
     logger.info(
-        "RTS: '%s' | Aktion=%-8s | CMD=0x%02X | RC=%5d (0x%04X) | → %s",
+        "RTS: '%s' | Aktion=%-8s | Byte1=0x%02X (ctrl=0x%X) | RC=%5d (0x%04X) | → %s",
         device_name or address,
         action,
         cmd_byte,
+        cmd_byte >> 4,
         rolling_code,
         rolling_code,
         telegram,

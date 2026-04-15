@@ -1,7 +1,8 @@
 """Allgemeine RTS-Geräte-Klasse für alle Somfy-Typen.
 
 Das RTS-Protokoll ist für ALLE Gerätetypen identisch:
-  CMD 0x2 = Auf, 0x4 = Zu, 0x1 = MY/Stop, 0x8 = Prog
+  ctrl-Nibble: 0x2=Auf, 0x4=Zu, 0x1=MY/Stop, 0x8=Prog
+  Byte 1 im Telegramm = ctrl<<4 (High-Nibble), cks=0 (Low-Nibble, culfw berechnet)
 
 Gerätetyp-spezifisches (HA device_class, Icons, Button-Labels) stammt
 ausschließlich aus device_profiles.json — keine separaten Klassen pro Typ.

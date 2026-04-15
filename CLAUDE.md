@@ -114,25 +114,29 @@ Sequenz pro Befehl (immer beide Zeilen senden):
 
 Felder:
   A0    = festes culfw-Präfix (Timing/Flags-Byte)
-  CMD   = 1 Byte, 2 Hex-Zeichen, z.B. "02"
+  CMD   = 1 Byte, 2 Hex-Zeichen = Byte 1 des Somfy-Frames
+          Byte 1 = (ctrl << 4) | cks
+          ctrl  = Befehlsnibble im High-Nibble, z.B. 0x2 für OPEN → "20"
+          cks   = Prüfsummen-Nibble (Low-Nibble), von culfw intern berechnet
+          → culfw erwartet ctrl im High-Nibble mit cks=0
   RC    = Rolling Code, 4 Hex-Zeichen (16-Bit Big-Endian), z.B. "001A"
   ADDR  = Geräteadresse, 6 Hex-Zeichen (3 Byte), z.B. "A1B2C3"
 
 Beispiel (OPEN, RC=1, Addr=A1B2C3):
   Yr1
-  YsA002001AA1B2C3
+  YsA020001AA1B2C3
 ```
 
 ### CMD-Bytes
 
-| Aktion | CMD (hex) | Beschreibung |
-|--------|-----------|--------------|
-| OPEN   | 0x2 (02)  | Auf / Hoch |
-| CLOSE  | 0x4 (04)  | Ab / Runter |
-| STOP   | 0x1 (01)  | My / Stop |
-| PROG   | 0x8 (08)  | Programmiermodus (Anlern) |
-| MY_UP  | 0x3 (03)  | My + Auf |
-| MY_DOWN| 0x5 (05)  | My + Ab |
+| Aktion | ctrl-Nibble | Byte 1 (ctrl<<4) | Beschreibung |
+|--------|-------------|------------------|--------------|
+| OPEN   | 0x2         | 0x20             | Auf / Hoch |
+| CLOSE  | 0x4         | 0x40             | Ab / Runter |
+| STOP   | 0x1         | 0x10             | My / Stop |
+| PROG   | 0x8         | 0x80             | Programmiermodus (Anlern) |
+| MY_UP  | 0x3         | 0x30             | My + Auf |
+| MY_DOWN| 0x5         | 0x50             | My + Ab |
 
 **WICHTIG:** `repeat=1` (`Yr1`) ist **PFLICHT** für Centralis uno RTS — der Motor
 ignoriert Telegramme mit repeat>1.
