@@ -361,6 +361,23 @@ class MQTTClient:
 
         self._subscribe(cmd_topic, command_handler)
 
+    # ---------- Deregistrierung ----------
+
+    def unregister_device(self, device: DeviceConfig) -> None:
+        """Löscht alle HA Discovery-Topics eines Geräts durch leere retained Payloads.
+
+        HA entfernt die Entitäten automatisch, sobald das zugehörige Discovery-Topic
+        eine leere retained Nachricht empfängt.
+
+        Args:
+            device: Gerätekonfiguration des zu löschenden Geräts.
+        """
+        for topic in discovery_topics(device):
+            self._client.publish(topic, "", retain=True)
+        logger.info(
+            "Discovery-Topics für '%s' (%s) gecleart.", device.name, device.address
+        )
+
     # ---------- Publish ----------
 
     def publish_state(self, device: DeviceConfig, state: str) -> None:
@@ -430,3 +447,38 @@ def _sub_device(device: DeviceConfig, profile: Optional[Dict] = None) -> dict:
         "manufacturer": "Somfy",
         "via_device": "somfy_rts_gateway",
     }
+
+
+def discovery_topics(device: DeviceConfig) -> list[str]:
+    """Gibt alle HA Discovery Config-Topics für ein Gerät zurück.
+
+    Wird von register_device() (implizit) und unregister_device() verwendet,
+    um sicherzustellen dass Registrierung und Deregistrierung immer dieselben
+    Topics nutzen.
+
+    Args:
+        device: Gerätekonfiguration (name, type, address, mode).
+
+    Returns:
+        Liste aller homeassistant/{component}/{unique_id}/config Topics.
+    """
+    uid = device.unique_id_base
+    # Gemeinsame Topics (beide Modi): PROG-Buttons + Diagnose-Sensoren
+    topics = [
+        f"{HA_DISCOVERY}/button/{uid}_prog_long/config",
+        f"{HA_DISCOVERY}/button/{uid}_prog_pair/config",
+        f"{HA_DISCOVERY}/sensor/{uid}_rolling_code/config",
+        f"{HA_DISCOVERY}/sensor/{uid}_last_command/config",
+    ]
+    if device.mode == "B":
+        topics += [
+            f"{HA_DISCOVERY}/button/{uid}_auf/config",
+            f"{HA_DISCOVERY}/button/{uid}_zu/config",
+            f"{HA_DISCOVERY}/button/{uid}_stop/config",
+        ]
+    else:  # Modus A
+        topics += [
+            f"{HA_DISCOVERY}/cover/{uid}/config",
+            f"{HA_DISCOVERY}/sensor/{uid}_device_address/config",
+        ]
+    return topics

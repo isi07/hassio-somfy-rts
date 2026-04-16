@@ -312,15 +312,35 @@ async def send_prog_pair(request: web.Request) -> web.Response:
 
 @routes.delete("/api/devices/{id}")
 async def delete_device(request: web.Request) -> web.Response:
-    """Remove a device from somfy_codes.json."""
+    """Remove a device from somfy_codes.json and clear its HA Discovery topics."""
+    ctx: AppContext = request.app["ctx"]
     addr = request.match_info["id"].upper()
     store = _load()
     devices = store.get("devices", [])
-    remaining = [d for d in devices if d.get("address", "").upper() != addr]
-    if len(remaining) == len(devices):
+    device_dict = next(
+        (d for d in devices if d.get("address", "").upper() == addr),
+        None,
+    )
+    if device_dict is None:
         raise web.HTTPNotFound(reason=f"Gerät {addr} nicht gefunden.")
+
+    # Clear MQTT Discovery topics before removing from the store
+    if ctx.mqtt_client is not None:
+        device_cfg = DeviceConfig(
+            name=device_dict.get("name", addr),
+            type=device_dict.get("device_type", "shutter"),
+            address=addr,
+            mode=device_dict.get("mode", "A"),
+        )
+        ctx.mqtt_client.unregister_device(device_cfg)
+
+    remaining = [d for d in devices if d.get("address", "").upper() != addr]
     store["devices"] = remaining
     _save_atomic(store)
+
+    if ctx.mqtt_client is not None:
+        ctx.mqtt_client.update_device_count(len(remaining))
+
     logger.info("API: Gerät %s gelöscht.", addr)
     return web.json_response({"status": "deleted", "address": addr})
 

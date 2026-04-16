@@ -492,6 +492,26 @@ Das Frame-Log enthält `REPEAT={n}` (text) bzw. `"repeat": n` (JSON).
 | `POST /api/wizard/send_prog_long` | Yr8 | Wizard: Motor in Anlernmodus (Zustand bleibt ADDR_READY) |
 | `POST /api/wizard/send_prog` | Yr4 | Wizard: Virtuellen Sender anlernen (→ PROG_SENT) |
 
+### MQTT Discovery Cleanup beim Löschen
+
+`DELETE /api/devices/{id}` ruft **vor** dem Löschen aus `somfy_codes.json` die Methode
+`mqtt_client.unregister_device(device_cfg)` auf — sofern ein MQTT-Client verfügbar ist.
+Danach wird `update_device_count()` mit der neuen Geräteanzahl publiziert.
+
+`mqtt_client.unregister_device(device: DeviceConfig)` publiziert eine leere Payload (`""`)
+mit `retain=True` auf alle Discovery-Topics des Geräts. HA entfernt die Entitäten dadurch
+automatisch ohne Neustart.
+
+`discovery_topics(device: DeviceConfig) → list[str]` (Modul-Level-Hilfsfunktion in
+`mqtt_client.py`) gibt alle Discovery-Topic-Namen zurück — gemeinsam genutzt von
+`unregister_device()` und implizit von den `_register_mode_*()` Methoden, damit
+Registrierung und Deregistrierung immer dieselben Topics verwenden.
+
+| Modus | Topics die gecleart werden |
+|-------|---------------------------|
+| A | cover, sensor_rolling_code, sensor_last_command, sensor_device_address, button_prog_long, button_prog_pair |
+| B | button_auf, button_zu, button_stop, sensor_rolling_code, sensor_last_command, button_prog_long, button_prog_pair |
+
 ### Gateway TX-Logging
 
 `CULGateway.send_raw()` und `SimGateway.send_raw()` loggen jeden gesendeten Befehl

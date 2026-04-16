@@ -242,6 +242,79 @@ async def test_delete_device_not_found(client):
     assert resp.status == 404
 
 
+async def test_delete_device_calls_unregister(aiohttp_client, tmp_codes_path):
+    """DELETE must call mqtt_client.unregister_device() when an MQTT client is set."""
+    from unittest.mock import MagicMock
+    import somfy_rts.rolling_code as rc
+    from somfy_rts.config import Config
+    from somfy_rts.gateway import SimGateway
+    from somfy_rts.mqtt_client import MQTTClient
+    from somfy_rts.web.server import create_app
+
+    # Prepare store with a Mode-A device
+    store = rc._load()
+    store["devices"].append({
+        "address": "D00001",
+        "name": "Garten Markise",
+        "rolling_code": 7,
+        "device_type": "awning",
+        "mode": "A",
+    })
+    rc._save_atomic(store)
+
+    # Create a mock MQTTClient
+    mock_mqtt = MagicMock(spec=MQTTClient)
+
+    gw = SimGateway()
+    gw.connect()
+    ctx = AppContext(gateway=gw, config=Config(), mqtt_client=mock_mqtt)
+    app = create_app(ctx)
+    test_client = await aiohttp_client(app)
+
+    resp = await test_client.delete("/api/devices/D00001")
+    assert resp.status == 200
+
+    # unregister_device() must have been called exactly once
+    mock_mqtt.unregister_device.assert_called_once()
+    # device_count updated after deletion
+    mock_mqtt.update_device_count.assert_called_once_with(0)
+
+
+async def test_delete_device_unregister_uses_correct_mode(aiohttp_client, tmp_codes_path):
+    """unregister_device() must receive the DeviceConfig with the correct mode."""
+    from unittest.mock import MagicMock
+    import somfy_rts.rolling_code as rc
+    from somfy_rts.config import Config, DeviceConfig
+    from somfy_rts.gateway import SimGateway
+    from somfy_rts.mqtt_client import MQTTClient
+    from somfy_rts.web.server import create_app
+
+    store = rc._load()
+    store["devices"].append({
+        "address": "E00001",
+        "name": "Küche Rollladen",
+        "rolling_code": 3,
+        "device_type": "shutter",
+        "mode": "B",
+    })
+    rc._save_atomic(store)
+
+    mock_mqtt = MagicMock(spec=MQTTClient)
+
+    gw = SimGateway()
+    gw.connect()
+    ctx = AppContext(gateway=gw, config=Config(), mqtt_client=mock_mqtt)
+    app = create_app(ctx)
+    test_client = await aiohttp_client(app)
+
+    await test_client.delete("/api/devices/E00001")
+
+    called_device: DeviceConfig = mock_mqtt.unregister_device.call_args[0][0]
+    assert called_device.address == "E00001"
+    assert called_device.mode == "B"
+    assert called_device.type == "shutter"
+
+
 # ---------- GET /api/wizard/status ----------
 
 
