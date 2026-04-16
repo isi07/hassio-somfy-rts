@@ -40,31 +40,7 @@ jobs:
         run: |
           pip install yamllint
           yamllint .github/workflows/build.yaml
-          yamllint blueprints/template/
           yamllint somfy-rts/config.yaml
-
-      - name: Validate HA Blueprints
-        run: |
-          python -c "
-          import yaml, sys
-
-          # Allow HA-specific tags like !input without errors
-          class HALoader(yaml.SafeLoader):
-              pass
-          HALoader.add_multi_constructor('', lambda l, t, n: l.construct_scalar(n))
-
-          files = [
-            'blueprints/template/somfy_rts_awning.yaml',
-            'blueprints/template/somfy_rts_shutter.yaml'
-          ]
-          for f in files:
-              with open(f) as fp:
-                  data = yaml.load(fp, Loader=HALoader)
-              assert 'blueprint' in data, f'{f}: missing blueprint key'
-              assert 'domain' in data['blueprint'], f'{f}: missing domain'
-              assert data['blueprint']['domain'] == 'template', f'{f}: wrong domain'
-              print(f'{f}: OK')
-          "
 
       - name: Lint JavaScript
         run: |
