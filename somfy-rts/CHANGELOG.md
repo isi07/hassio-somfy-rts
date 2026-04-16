@@ -11,6 +11,10 @@ Format: [Conventional Commits](https://www.conventionalcommits.org/de/)
 - Blueprints entfernt — Template Cover Beispiele (Modus A + B) direkt in DOCS.md
 - .claude/worktrees/ und .claude/projects/ zu .gitignore hinzugefügt
 
+### CI
+
+- Blueprint-Lint und Blueprint-Validierungs-Schritte aus build.yaml entfernt
+
 
 ## [0.3.13] - 2026-04-16
 
