@@ -117,7 +117,7 @@ class RTSLogger:
                 f"{ts} [INFO] [somfy_rts] "
                 f"CMD={cmd.upper():<8} DEV={device_id.upper()} "
                 f"REPEAT={repeat} "
-                f"RC_PRE={rc_before:04X} RC_POST={rc_after:04X} "
+                f"RC_PRE={rc_before} RC_POST={rc_after} "
                 f"FRAME={frame} STATUS={status}"
             )
             if error:

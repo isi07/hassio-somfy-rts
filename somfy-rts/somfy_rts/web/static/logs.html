@@ -114,7 +114,8 @@ function parseEntry(entry) {
     timestamp: new Date(entry.ts * 1000).toISOString(),
     command:   p("CMD").replace(/\s+/g,""),
     device_id: p("DEV"),
-    rolling_code_after: parseInt(p("RC_POST"), 16) || "",
+    rolling_code_after: parseInt(p("RC_POST"), 10) || "",
+    repeat:    parseInt(p("REPEAT"), 10) || 1,
     frame_raw: p("FRAME"),
     status:    p("STATUS"),
     event:     p("EVENT") || null,
@@ -168,8 +169,8 @@ function renderTable(entries) {
       <td class="mono">${formatTime(entry.ts)}</td>
       <td class="mono text-accent">${escHtml(p.device_id||"")}</td>
       <td><strong>${escHtml(p.command||"")}</strong></td>
-      <td class="mono">${p.rolling_code_after !== "" ? "0x" + String(Number(p.rolling_code_after)).toString(16).toUpperCase().padStart(4,"0") : "–"}</td>
-      <td class="mono" style="font-size:.75rem">${escHtml(p.frame_raw||"")}</td>
+      <td class="mono">${p.rolling_code_after !== "" ? String(p.rolling_code_after) : "–"}</td>
+      <td class="mono" style="font-size:.75rem">${escHtml("Yr" + (p.repeat || 1) + " | " + (p.frame_raw || ""))}</td>
       <td class="${ok?"status-ok":"status-err"}">${escHtml(p.status||"")}</td>
     `;
     tbody.appendChild(tr);

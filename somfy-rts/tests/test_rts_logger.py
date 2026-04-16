@@ -39,8 +39,8 @@ class TestTextFormat:
         captured = capsys.readouterr()
         assert "CMD=OPEN" in captured.out
         assert "DEV=A00001" in captured.out
-        assert "RC_PRE=0000" in captured.out
-        assert "RC_POST=0001" in captured.out
+        assert "RC_PRE=0" in captured.out
+        assert "RC_POST=1" in captured.out
         assert "FRAME=YsA002001AA00001" in captured.out
         assert "STATUS=OK" in captured.out
 
