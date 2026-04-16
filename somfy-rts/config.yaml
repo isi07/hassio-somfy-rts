@@ -1,5 +1,5 @@
 name: "Somfy RTS"
-version: "0.3.11"
+version: "0.3.12"
 slug: somfy_rts
 description: "Controls Somfy RTS devices (awnings, shutters) via NanoCUL USB stick with culfw firmware over MQTT"
 url: "https://github.com/isi07/hassio-somfy-rts"
