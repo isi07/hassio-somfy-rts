@@ -207,12 +207,16 @@ main { padding: 1rem 1.25rem; max-width: 900px; }
 .btn-up   { background: var(--surface2); color: var(--text); flex: 1; }
 .btn-stop { background: var(--accent);  color: #000;          flex: 1; }
 .btn-dn   { background: var(--surface2); color: var(--text); flex: 1; }
-.btn-my   { background: var(--surface2); color: var(--text-dim); font-size: .75rem; }
+.btn-my        { background: var(--surface2); color: var(--text-dim); font-size: .75rem; }
+.btn-prog-long { background: var(--surface2); color: var(--text-dim); font-size: .75rem; flex: 1; }
+.btn-prog-pair { background: var(--surface2); color: var(--text-dim); font-size: .75rem; flex: 1; }
 
-.btn-up:hover   { background: #3a3a3a; }
-.btn-stop:hover { background: var(--accent-lt); }
-.btn-dn:hover   { background: #3a3a3a; }
-.btn-my:hover   { background: #3a3a3a; color: var(--text); }
+.btn-up:hover        { background: #3a3a3a; }
+.btn-stop:hover      { background: var(--accent-lt); }
+.btn-dn:hover        { background: #3a3a3a; }
+.btn-my:hover        { background: #3a3a3a; color: var(--text); }
+.btn-prog-long:hover { background: #3a3a3a; color: var(--text); }
+.btn-prog-pair:hover { background: #3a3a3a; color: var(--text); }
 
 .btn-primary {
   background: var(--accent);

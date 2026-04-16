@@ -127,3 +127,42 @@ class TestCmdBytes:
         from somfy_rts.rts import build_rts_sequence
         seq = build_rts_sequence("A00001", "up")
         assert self._cmd_from_telegram(seq.frame) == "20"
+
+
+class TestRepeat:
+    def test_default_repeat_is_1(self, tmp_codes_path):
+        """Default repeat produces 'Yr1' as first command."""
+        from somfy_rts.rts import build_rts_sequence
+        seq = build_rts_sequence("A00001", "UP")
+        assert seq.commands[0] == "Yr1"
+        assert seq.repeat == 1
+
+    def test_repeat_4_produces_yr4(self, tmp_codes_path):
+        """repeat=4 (PROG Anlern) produces 'Yr4' as first command."""
+        from somfy_rts.rts import build_rts_sequence
+        seq = build_rts_sequence("A00001", "PROG", repeat=4)
+        assert seq.commands[0] == "Yr4"
+        assert seq.repeat == 4
+
+    def test_repeat_8_produces_yr8(self, tmp_codes_path):
+        """repeat=8 (PROG Lang) produces 'Yr8' as first command."""
+        from somfy_rts.rts import build_rts_sequence
+        seq = build_rts_sequence("A00001", "PROG", repeat=8)
+        assert seq.commands[0] == "Yr8"
+        assert seq.repeat == 8
+
+    def test_repeat_stored_in_sequence(self, tmp_codes_path):
+        """RTSSequence.repeat reflects the repeat parameter."""
+        from somfy_rts.rts import build_rts_sequence
+        for n in (1, 4, 8):
+            seq = build_rts_sequence("A00001", "PROG", repeat=n)
+            assert seq.repeat == n
+
+    def test_repeat_does_not_affect_telegram(self, tmp_codes_path):
+        """repeat only changes Yr{n} — the YsA0 telegram content stays identical."""
+        from somfy_rts.rts import build_rts_sequence
+        seq1 = build_rts_sequence("A00001", "PROG", repeat=1)
+        seq4 = build_rts_sequence("A00001", "PROG", repeat=4)
+        # Both telegrams start with YsA0 and have the same CMD byte (0x80 for PROG)
+        assert seq1.commands[1][4:6] == "80"
+        assert seq4.commands[1][4:6] == "80"

@@ -1,24 +1,27 @@
 """REST API routes for the Somfy RTS Web UI.
 
 Endpoints:
-  GET  /api/status               → gateway + simulation status
-  GET  /api/devices              → all devices from somfy_codes.json
-  GET  /api/devices/{id}         → single device by address
-  POST /api/devices/import       → add device by known address + rolling code (no pairing)
-  POST /api/devices/{id}/cmd     → send RTS command (OPEN/CLOSE/STOP/MY_UP/MY_DOWN)
-  DELETE /api/devices/{id}       → remove device
+  GET  /api/status                    → gateway + simulation status
+  GET  /api/devices                   → all devices from somfy_codes.json
+  GET  /api/devices/{id}              → single device by address
+  POST /api/devices/import            → add device by known address + rolling code (no pairing)
+  POST /api/devices/{id}/cmd          → send RTS command (OPEN/CLOSE/STOP/MY_UP/MY_DOWN)
+  POST /api/devices/{id}/prog-long    → send PROG Yr8 (put motor in pairing mode)
+  POST /api/devices/{id}/prog-pair    → send PROG Yr4 (register/deregister remote)
+  DELETE /api/devices/{id}            → remove device
 
-  GET  /api/wizard/status        → current wizard state
-  POST /api/wizard/start         → start pairing (name, device_type)
-  POST /api/wizard/send_prog     → transmit PROG telegram
-  POST /api/wizard/confirm       → confirm motor pairing
-  POST /api/wizard/cancel        → abort wizard session
+  GET  /api/wizard/status             → current wizard state
+  POST /api/wizard/start              → start pairing (name, device_type)
+  POST /api/wizard/send_prog_long     → transmit PROG Yr8 (motor into pairing mode)
+  POST /api/wizard/send_prog          → transmit PROG Yr4 (register virtual remote)
+  POST /api/wizard/confirm            → confirm motor pairing
+  POST /api/wizard/cancel             → abort wizard session
 
-  GET  /api/settings             → current config
-  POST /api/settings             → (read-only — managed via HA)
+  GET  /api/settings                  → current config
+  POST /api/settings                  → (read-only — managed via HA)
 
-  GET  /api/logs                 → last 100 RTS frame log entries
-  GET  /api/logs/download        → download /share/somfy_rts/rts_frames.log
+  GET  /api/logs                      → last 100 RTS frame log entries
+  GET  /api/logs/download             → download /share/somfy_rts/rts_frames.log
 """
 
 import logging
@@ -250,6 +253,63 @@ async def send_command(request: web.Request) -> web.Response:
     return web.json_response({"status": "sent", "action": rts_action, "address": addr})
 
 
+async def _send_prog_with_repeat(
+    request: web.Request, repeat: int, label: str
+) -> web.Response:
+    """Shared implementation for prog-long and prog-pair device endpoints."""
+    ctx: AppContext = request.app["ctx"]
+    addr = request.match_info["id"].upper()
+
+    store = _load()
+    device = next(
+        (d for d in store.get("devices", []) if d.get("address", "").upper() == addr),
+        None,
+    )
+    if device is None:
+        raise web.HTTPNotFound(reason=f"Gerät {addr} nicht gefunden.")
+
+    if not ctx.gateway.is_connected:
+        raise web.HTTPServiceUnavailable(reason="Gateway nicht verbunden.")
+
+    try:
+        seq = build_rts_sequence(addr, "PROG", device.get("name", ""), repeat=repeat)
+    except ValueError as exc:
+        raise web.HTTPBadRequest(reason=str(exc)) from exc
+
+    try:
+        for cmd in seq.commands:
+            ctx.gateway.send_raw(cmd)
+    except Exception as exc:
+        logger.error("Sendefehler %s → PROG Yr%d: %s", addr, repeat, exc)
+        log_rts_frame(seq, addr, "PROG", success=False, error=str(exc))
+        raise web.HTTPInternalServerError(reason=str(exc)) from exc
+
+    log_rts_frame(seq, addr, "PROG", success=True)
+    logger.info("API: %s → %s (Yr%d) gesendet.", addr, label, repeat)
+    return web.json_response(
+        {"status": "sent", "action": label, "address": addr, "repeat": repeat}
+    )
+
+
+@routes.post("/api/devices/{id}/prog-long")
+async def send_prog_long(request: web.Request) -> web.Response:
+    """Send PROG with repeat=8 (Yr8) — puts the motor in pairing mode.
+
+    Use this instead of holding the PROG button on the original remote.
+    After the motor enters pairing mode, send prog-pair to register the virtual remote.
+    """
+    return await _send_prog_with_repeat(request, repeat=8, label="PROG_LONG")
+
+
+@routes.post("/api/devices/{id}/prog-pair")
+async def send_prog_pair(request: web.Request) -> web.Response:
+    """Send PROG with repeat=4 (Yr4) — registers or deregisters the virtual remote.
+
+    The motor must already be in pairing mode (via prog-long or the original remote).
+    """
+    return await _send_prog_with_repeat(request, repeat=4, label="PROG_PAIR")
+
+
 @routes.delete("/api/devices/{id}")
 async def delete_device(request: web.Request) -> web.Response:
     """Remove a device from somfy_codes.json."""
@@ -311,14 +371,30 @@ async def wizard_start(request: web.Request) -> web.Response:
     return web.json_response({"state": "ADDR_READY", "address": addr})
 
 
-@routes.post("/api/wizard/send_prog")
-async def wizard_send_prog(request: web.Request) -> web.Response:
-    """Transmit the PROG telegram to the motor."""
+@routes.post("/api/wizard/send_prog_long")
+async def wizard_send_prog_long(request: web.Request) -> web.Response:
+    """Transmit PROG Yr8 to put the motor in pairing mode (no original remote needed).
+
+    Wizard state remains ADDR_READY — follow up with /api/wizard/send_prog.
+    """
     ctx: AppContext = request.app["ctx"]
     if ctx.wizard is None:
         raise web.HTTPBadRequest(reason="Keine aktive Wizard-Sitzung.")
     try:
-        ctx.wizard.send_prog()
+        ctx.wizard.send_prog_long()
+    except (RuntimeError, Exception) as exc:
+        raise web.HTTPConflict(reason=str(exc)) from exc
+    return web.json_response({"state": ctx.wizard.state.name, "repeat": 8})
+
+
+@routes.post("/api/wizard/send_prog")
+async def wizard_send_prog(request: web.Request) -> web.Response:
+    """Transmit PROG Yr4 to register the virtual remote with the motor."""
+    ctx: AppContext = request.app["ctx"]
+    if ctx.wizard is None:
+        raise web.HTTPBadRequest(reason="Keine aktive Wizard-Sitzung.")
+    try:
+        ctx.wizard.send_prog_pair()
     except RuntimeError as exc:
         raise web.HTTPConflict(reason=str(exc)) from exc
     return web.json_response({"state": "PROG_SENT"})

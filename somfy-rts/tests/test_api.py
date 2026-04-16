@@ -554,3 +554,103 @@ class TestImportDevice:
         assert resp.status == 200
         devices = (await resp.json())["devices"]
         assert any(d["address"].upper() == "AABBCC" for d in devices)
+
+
+# ---------- POST /api/devices/{id}/prog-long and prog-pair ----------
+
+
+class TestProgEndpoints:
+    """Tests for the PROG Long (Yr8) and PROG Pair (Yr4) device endpoints."""
+
+    async def _insert_device(self, addr: str = "A00010") -> None:
+        import somfy_rts.rolling_code as rc
+        store = rc._load()
+        store["devices"].append({
+            "address": addr, "name": "Testgerät", "rolling_code": 0, "device_type": "shutter",
+        })
+        rc._save_atomic(store)
+
+    async def test_prog_long_sends_yr8(self, client, ctx, tmp_codes_path):
+        """prog-long endpoint sends Yr8 as the first gateway command."""
+        await self._insert_device()
+        resp = await client.post("/api/devices/A00010/prog-long")
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "sent"
+        assert data["repeat"] == 8
+        assert ctx.gateway.sent_commands[0] == "Yr8"
+        assert ctx.gateway.sent_commands[1].startswith("YsA0")
+        # PROG CMD byte must be 0x80
+        assert ctx.gateway.sent_commands[1][4:6] == "80"
+
+    async def test_prog_pair_sends_yr4(self, client, ctx, tmp_codes_path):
+        """prog-pair endpoint sends Yr4 as the first gateway command."""
+        await self._insert_device()
+        resp = await client.post("/api/devices/A00010/prog-pair")
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "sent"
+        assert data["repeat"] == 4
+        assert ctx.gateway.sent_commands[0] == "Yr4"
+        assert ctx.gateway.sent_commands[1].startswith("YsA0")
+        assert ctx.gateway.sent_commands[1][4:6] == "80"
+
+    async def test_prog_long_device_not_found(self, client):
+        resp = await client.post("/api/devices/FFFFFF/prog-long")
+        assert resp.status == 404
+
+    async def test_prog_pair_device_not_found(self, client):
+        resp = await client.post("/api/devices/FFFFFF/prog-pair")
+        assert resp.status == 404
+
+
+# ---------- POST /api/wizard/send_prog_long ----------
+
+
+async def test_wizard_send_prog_long(client, ctx, tmp_codes_path):
+    """Wizard send_prog_long keeps state at ADDR_READY and sends Yr8."""
+    # Start wizard first
+    await client.post(
+        "/api/wizard/start",
+        data=json.dumps({"name": "Testgerät", "device_type": "shutter"}),
+        headers={"Content-Type": "application/json"},
+    )
+    resp = await client.post("/api/wizard/send_prog_long")
+    assert resp.status == 200
+    data = await resp.json()
+    # State remains ADDR_READY — not PROG_SENT
+    assert data["state"] == "ADDR_READY"
+    assert data["repeat"] == 8
+    assert ctx.gateway.sent_commands[0] == "Yr8"
+
+
+async def test_wizard_send_prog_long_no_session(client):
+    """send_prog_long without an active wizard session returns 400."""
+    resp = await client.post("/api/wizard/send_prog_long")
+    assert resp.status == 400
+
+
+async def test_wizard_full_flow_with_prog_long(client, ctx, tmp_codes_path):
+    """Full wizard flow using send_prog_long + send_prog completes successfully."""
+    # Start
+    r1 = await client.post(
+        "/api/wizard/start",
+        data=json.dumps({"name": "Wohnzimmer", "device_type": "shutter"}),
+        headers={"Content-Type": "application/json"},
+    )
+    assert r1.status == 200
+
+    # Send PROG Lang (Yr8) — motor enters pairing mode
+    r2 = await client.post("/api/wizard/send_prog_long")
+    assert r2.status == 200
+    assert (await r2.json())["state"] == "ADDR_READY"
+
+    # Send PROG Pair (Yr4) — register virtual remote
+    r3 = await client.post("/api/wizard/send_prog")
+    assert r3.status == 200
+    assert (await r3.json())["state"] == "PROG_SENT"
+
+    # Confirm
+    r4 = await client.post("/api/wizard/confirm")
+    assert r4.status == 200
+    assert (await r4.json())["state"] == "CONFIRMED"

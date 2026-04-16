@@ -77,6 +77,7 @@ class RTSLogger:
         serial_bytes: str,
         success: bool,
         error: str = "",
+        repeat: int = 1,
     ) -> None:
         """Log a single RTS frame transmission.
 
@@ -89,6 +90,7 @@ class RTSLogger:
             serial_bytes: Hex representation of bytes sent over serial.
             success:      True if transmission succeeded without exception.
             error:        Error message if success is False.
+            repeat:       culfw repeat count sent as Yr{repeat} (default: 1).
         """
         ts = _iso_now()
         status = "OK" if success else "ERR"
@@ -100,6 +102,7 @@ class RTSLogger:
                     "level": "INFO" if success else "ERROR",
                     "device_id": device_id.upper(),
                     "command": cmd.upper(),
+                    "repeat": repeat,
                     "rolling_code_before": rc_before,
                     "rolling_code_after": rc_after,
                     "frame_raw": frame,
@@ -113,6 +116,7 @@ class RTSLogger:
             payload = (
                 f"{ts} [INFO] [somfy_rts] "
                 f"CMD={cmd.upper():<8} DEV={device_id.upper()} "
+                f"REPEAT={repeat} "
                 f"RC_PRE={rc_before:04X} RC_POST={rc_after:04X} "
                 f"FRAME={frame} STATUS={status}"
             )

@@ -95,15 +95,25 @@
     <!-- Step 3: Send PROG -->
     <div class="step-panel" id="panel-3">
       <div class="instruction-box">
-        <strong>PROG-Telegramm wird gesendet…</strong><br>
-        Der NanoCUL sendet das Anlern-Signal an den Motor.
-        Der Motor bestätigt mit einer kurzen Auf-Ab-Bewegung.
+        <strong>Motor anlernen — zwei Schritte:</strong>
+        <ol>
+          <li>
+            <strong>Optional:</strong> Auf <em>Motor in Anlernmodus</em> klicken
+            (PROG Yr8) — ersetzt das Drücken der PROG-Taste an der Original-FB.
+            Falls du die Original-FB bereits benutzt hast, diesen Schritt überspringen.
+          </li>
+          <li>
+            Auf <em>PROG senden</em> klicken (PROG Yr4) — lernt den virtuellen Sender
+            am Motor an. Der Motor bestätigt mit einer kurzen Auf-Ab-Bewegung.
+          </li>
+        </ol>
       </div>
       <div id="prog-status" class="text-center mt" style="min-height:2rem"></div>
       <div id="step3-err" class="alert alert-err hidden mt"></div>
       <div class="flex gap mt-lg">
         <button class="btn btn-secondary" id="btn-back3">← Zurück</button>
-        <button class="btn btn-primary" id="btn-send-prog">PROG senden ▶</button>
+        <button class="btn btn-secondary" id="btn-prog-long" title="PROG Yr8 — Motor in Anlernmodus versetzen">⏱ Motor in Anlernmodus</button>
+        <button class="btn btn-primary"   id="btn-send-prog" title="PROG Yr4 — virtuellen Sender anlernen">📡 PROG senden ▶</button>
       </div>
     </div>
 
@@ -215,12 +225,29 @@ document.getElementById("btn-back2").addEventListener("click", async () => {
   showStep(1);
 });
 
-// Step 3 → Send PROG
+// Step 3 → Motor in Anlernmodus (PROG Yr8)
+document.getElementById("btn-prog-long").addEventListener("click", async () => {
+  hideErr("step3-err");
+  const btn = document.getElementById("btn-prog-long");
+  btn.disabled = true;
+  document.getElementById("prog-status").innerHTML = '<span class="spinner"></span> Sende PROG Lang (Yr8)…';
+  try {
+    await apiFetch("/api/wizard/send_prog_long", {method:"POST"});
+    document.getElementById("prog-status").innerHTML = '<span class="text-ok">✓ Motor im Anlernmodus — jetzt PROG senden klicken</span>';
+  } catch(e) {
+    document.getElementById("prog-status").innerHTML = "";
+    showErr("step3-err", "Sendefehler: " + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Step 3 → Send PROG (PROG Yr4)
 document.getElementById("btn-send-prog").addEventListener("click", async () => {
   hideErr("step3-err");
   const btn = document.getElementById("btn-send-prog");
   btn.disabled = true;
-  document.getElementById("prog-status").innerHTML = '<span class="spinner"></span> Sende PROG…';
+  document.getElementById("prog-status").innerHTML = '<span class="spinner"></span> Sende PROG Anlern (Yr4)…';
   try {
     await apiFetch("/api/wizard/send_prog", {method:"POST"});
     document.getElementById("prog-status").innerHTML = '<span class="text-ok">✓ PROG gesendet — warte auf Motor-Bestätigung</span>';
@@ -252,6 +279,7 @@ document.getElementById("btn-retry").addEventListener("click", async () => {
   // Go back to send PROG again
   document.getElementById("prog-status").innerHTML = "";
   document.getElementById("btn-send-prog").disabled = false;
+  document.getElementById("btn-prog-long").disabled = false;
   hideErr("step3-err");
   showStep(3);
 });

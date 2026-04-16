@@ -32,7 +32,7 @@
 ### 1 · Rolling Code Atomizität
 
 - RC wird **atomar** (`tempfile` + `os.replace()`) gespeichert **BEVOR** der RTS-Befehl gesendet wird
-- Reihenfolge: `RC speichern` → `Yr1 senden` → `YsA0… senden`
+- Reihenfolge: `RC speichern` → `Yr{n} senden` → `YsA0… senden`
 - **NIEMALS** RC nach dem Senden speichern — bei Stromausfall dazwischen lässt sich der Motor nicht mehr steuern
 - **NIEMALS** direkt in `somfy_codes.json` schreiben ohne `os.replace()`
 
@@ -49,20 +49,22 @@ gateway.send_raw("Yr1")
 gateway.send_raw(telegram)
 ```
 
-### 2 · Yr1 Pflicht-Kommando
+### 2 · Yr{n} Pflicht-Kommando
 
-- `Yr1` **MUSS** immer **VOR** dem `YsA0…`-Telegramm gesendet werden
-- Centralis uno RTS ignoriert Telegramme ohne vorherigen `Yr1` — **kommentarlos, kein Fehler**
-- `build_rts_sequence()` gibt **immer** `["Yr1", telegram]` zurück — nie nur `[telegram]`
+- `Yr{n}` **MUSS** immer **VOR** dem `YsA0…`-Telegramm gesendet werden
+- Centralis uno RTS ignoriert Telegramme ohne vorherigen `Yr`-Befehl — **kommentarlos, kein Fehler**
+- `build_rts_sequence()` gibt **immer** `[f"Yr{repeat}", telegram]` zurück — nie nur `[telegram]`
 - `log_rts_frame()` wird **nach** dem `send_raw()`-Loop aufgerufen — `STATUS=OK` bedeutet echt gesendet
+- **repeat-Werte:** `1` = Normalbefehle (Centralis uno: PFLICHT!), `4` = PROG Anlern, `8` = PROG Lang
 
 ```python
-# ❌ FALSCH — Yr1 fehlt
+# ❌ FALSCH — Yr{n} fehlt
 gateway.send_raw(telegram)        # Motor ignoriert das Telegramm stillschweigend!
 
 # ✅ RICHTIG — beide Kommandos aus RTSSequence.commands, log NACH dem Senden
-seq = build_rts_sequence(address, action, name)
-for cmd in seq.commands:          # ["Yr1", "YsA0..."]
+seq = build_rts_sequence(address, action, name)          # repeat=1 (Standard)
+seq = build_rts_sequence(address, "PROG", name, repeat=8)  # PROG Lang
+for cmd in seq.commands:          # [f"Yr{repeat}", "YsA0..."]
     gateway.send_raw(cmd)
 log_rts_frame(seq, address, action, success=True)   # erst hier: STATUS=OK ist echt
 ```
@@ -109,8 +111,13 @@ Jalousien usw.) über einen **NanoCUL USB-Stick** mit **culfw-Firmware** via **M
 
 ```
 Sequenz pro Befehl (immer beide Zeilen senden):
-  1.  Yr1                            → Wiederholungen auf 1 setzen (PFLICHT)
+  1.  Yr{n}                          → Wiederholungsanzahl setzen (Standard: n=1)
   2.  YsA0<CMD><RC><ADDR>            → RTS Telegramm
+
+  Wiederholungswerte (n):
+    1 = Normalbefehle (PFLICHT für Centralis uno RTS!)
+    4 = PROG Anlern (virtuellen Sender am Motor registrieren)
+    8 = PROG Lang (Motor in Anlernmodus versetzen, ersetzt PROG-Taste der Original-FB)
 
 Felder:
   A0    = festes culfw-Präfix (Timing/Flags-Byte)
@@ -122,9 +129,13 @@ Felder:
   RC    = Rolling Code, 4 Hex-Zeichen (16-Bit Big-Endian), z.B. "001A"
   ADDR  = Geräteadresse, 6 Hex-Zeichen (3 Byte), z.B. "A1B2C3"
 
-Beispiel (OPEN, RC=1, Addr=A1B2C3):
+Beispiel (UP, RC=1, Addr=A1B2C3, repeat=1):
   Yr1
   YsA020001AA1B2C3
+
+Beispiel PROG Lang (repeat=8):
+  Yr8
+  YsA080001AA1B2C3
 ```
 
 ### CMD-Bytes
@@ -138,8 +149,9 @@ Beispiel (OPEN, RC=1, Addr=A1B2C3):
 | MY_UP  | 0x3         | 0x30             | My + Auf |
 | MY_DOWN| 0x5         | 0x50             | My + Ab |
 
-**WICHTIG:** `repeat=1` (`Yr1`) ist **PFLICHT** für Centralis uno RTS — der Motor
-ignoriert Telegramme mit repeat>1.
+**WICHTIG:** `repeat=1` (`Yr1`) ist **PFLICHT** für Centralis uno RTS bei Normalbefehlen — der Motor
+ignoriert Telegramme mit repeat>1. Ausnahme: PROG-Telegramme mit repeat=4 oder repeat=8
+werden unterstützt und von culfw korrekt verarbeitet.
 
 ---
 
@@ -395,10 +407,20 @@ Erstellt ein Template Cover für Rollläden:
 Der `PairingWizard` steuert den 5-stufigen Anlern-Flow:
 
 1. `wizard.start(name, device_type, mode="A")` — Adresse generieren, RC auf 0 setzen, in `somfy_codes.json` voranlegen (inkl. `mode`-Feld)
-2. Motor in Programmiermodus versetzen (Orig.-FB PROG 3s halten → kurzes Auf-Ab)
-3. `wizard.send_prog()` — PROG-Telegramm (cmd=0x8) via CUL senden
+2. Motor in Programmiermodus versetzen — entweder:
+   - **Klassisch:** Orig.-FB PROG 3s halten → kurzes Auf-Ab
+   - **Alternativ:** `wizard.send_prog_long()` (Yr8) senden — ersetzt die Original-FB
+3. `wizard.send_prog_pair()` (oder Alias `wizard.send_prog()`) — PROG Yr4 senden → virtuellen Sender anlernen
 4. Operator sieht Motor-Bestätigungsbewegung → `wizard.confirm()` aufrufen
 5. `wizard.get_device_config()` — Config-Dict zurückgeben (enthält `mode`)
+
+### PROG-Methoden im Wizard
+
+| Methode | repeat | Aktion | Zustand danach |
+|---------|--------|--------|----------------|
+| `send_prog_long()` | Yr8 | Motor in Anlernmodus versetzen (ersetzt Orig.-FB PROG) | ADDR_READY |
+| `send_prog_pair()` | Yr4 | Virtuellen Sender am Motor registrieren/deregistrieren | PROG_SENT |
+| `send_prog()` | Yr4 | Alias für `send_prog_pair()` | PROG_SENT |
 
 **Modus A/B** ist in der Web-UI wählbar: Anlern-Wizard (Schritt 1) und Import-Dialog
 bieten je ein Dropdown — `A` = Cover-Entity, `B` = Buttons + Sensoren für Blueprint.
@@ -427,20 +449,31 @@ Für Geräte, die bereits via ioBroker oder einer anderen App gepaart wurden:
 
 ### `rts.py` — `RTSSequence` und Frame-Logging
 
-`build_rts_sequence()` gibt einen `RTSSequence`-Dataclass zurück:
+`build_rts_sequence(address, action, device_name="", repeat=1)` gibt einen `RTSSequence`-Dataclass zurück:
 
 ```python
 @dataclass
 class RTSSequence:
-    commands: list[str]   # ["Yr1", "YsA0..."]
-    frame: str            # telegram string
+    commands: list[str]   # [f"Yr{repeat}", "YsA0..."]
+    frame: str            # telegram string = commands[1]
     rc_before: int        # rolling code vor Inkrement
     rc_after: int         # rolling code nach Inkrement (im Frame kodiert)
+    repeat: int = 1       # culfw repeat count (Yr{repeat})
 ```
 
 `log_rts_frame(seq, device_id, action, success, error="")` wird vom **Aufrufer** nach
 dem `send_raw()`-Loop aufgerufen — **nicht** innerhalb von `build_rts_sequence()`.
 `STATUS=OK` im Frame-Log bedeutet damit, dass das Telegramm wirklich gesendet wurde.
+Das Frame-Log enthält `REPEAT={n}` (text) bzw. `"repeat": n` (JSON).
+
+### REST-Endpunkte für PROG
+
+| Endpunkt | repeat | Aktion |
+|----------|--------|--------|
+| `POST /api/devices/{id}/prog-long` | Yr8 | Motor in Anlernmodus versetzen |
+| `POST /api/devices/{id}/prog-pair` | Yr4 | Virtuellen Sender registrieren/deregistrieren |
+| `POST /api/wizard/send_prog_long` | Yr8 | Wizard: Motor in Anlernmodus (Zustand bleibt ADDR_READY) |
+| `POST /api/wizard/send_prog` | Yr4 | Wizard: Virtuellen Sender anlernen (→ PROG_SENT) |
 
 ### Gateway TX-Logging
 
@@ -559,7 +592,7 @@ Tag und `config.yaml` version müssen **IMMER** übereinstimmen.
 
 ### ✅ Do's
 
-- `Yr1` immer **vor** `YsA0…` senden — `build_rts_sequence()` macht das automatisch
+- `Yr{n}` immer **vor** `YsA0…` senden — `build_rts_sequence(repeat=n)` macht das automatisch
 - RC **atomar** speichern (`tempfile` + `os.replace()`) **vor** dem Senden
 - `log_rts_frame()` **nach** `send_raw()` aufrufen
 - `pytest` nach jeder Änderung ausführen — alle Tests müssen grün bleiben
@@ -570,7 +603,7 @@ Tag und `config.yaml` version müssen **IMMER** übereinstimmen.
 ### ❌ Don'ts
 
 - RC **nicht** nach dem Senden speichern
-- `Yr1` **nicht** weglassen
+- `Yr{n}` **nicht** weglassen
 - `log_rts_frame()` **nicht** vor `send_raw()` aufrufen (`STATUS=OK` wäre gelogen)
 - **Nicht** direkt in `somfy_codes.json` schreiben ohne atomares Speichern
 - **Kein** `print()` — immer `logging` verwenden

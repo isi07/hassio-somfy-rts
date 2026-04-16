@@ -131,5 +131,72 @@ class TestDeviceConfig:
         wizard.start("Testgerät", "shutter")
         wizard.send_prog()
         assert mock_gateway.send_raw.called
-        # Yr1 and the telegram — at least 2 calls
+        # Yr4 and the telegram — at least 2 calls
         assert mock_gateway.send_raw.call_count >= 2
+
+
+class TestProgLongAndProgPair:
+    """Tests for send_prog_long() (Yr8) and send_prog_pair() (Yr4)."""
+
+    def test_send_prog_pair_transitions_to_prog_sent(self, tmp_codes_path, mock_gateway):
+        from somfy_rts.wizard import PairingWizard, WizardState
+        wizard = PairingWizard(mock_gateway)
+        wizard.start("Testgerät", "shutter")
+        wizard.send_prog_pair()
+        assert wizard.state == WizardState.PROG_SENT
+
+    def test_send_prog_pair_sends_yr4(self, tmp_codes_path, mock_gateway):
+        from somfy_rts.wizard import PairingWizard
+        wizard = PairingWizard(mock_gateway)
+        wizard.start("Testgerät", "shutter")
+        wizard.send_prog_pair()
+        # First send_raw call must be "Yr4"
+        first_call = mock_gateway.send_raw.call_args_list[0][0][0]
+        assert first_call == "Yr4"
+
+    def test_send_prog_long_stays_in_addr_ready(self, tmp_codes_path, mock_gateway):
+        from somfy_rts.wizard import PairingWizard, WizardState
+        wizard = PairingWizard(mock_gateway)
+        wizard.start("Testgerät", "shutter")
+        wizard.send_prog_long()
+        assert wizard.state == WizardState.ADDR_READY
+
+    def test_send_prog_long_sends_yr8(self, tmp_codes_path, mock_gateway):
+        from somfy_rts.wizard import PairingWizard
+        wizard = PairingWizard(mock_gateway)
+        wizard.start("Testgerät", "shutter")
+        wizard.send_prog_long()
+        # First send_raw call must be "Yr8"
+        first_call = mock_gateway.send_raw.call_args_list[0][0][0]
+        assert first_call == "Yr8"
+
+    def test_send_prog_long_then_pair_completes_pairing(self, tmp_codes_path, mock_gateway):
+        """Full flow: send_prog_long + send_prog_pair + confirm works end-to-end."""
+        from somfy_rts.wizard import PairingWizard, WizardState
+        wizard = PairingWizard(mock_gateway)
+        wizard.start("Testgerät", "shutter")
+        wizard.send_prog_long()
+        wizard.send_prog_pair()
+        wizard.confirm()
+        assert wizard.state == WizardState.CONFIRMED
+
+    def test_send_prog_is_alias_for_send_prog_pair(self, tmp_codes_path, mock_gateway):
+        """send_prog() must behave identically to send_prog_pair()."""
+        from somfy_rts.wizard import PairingWizard, WizardState
+        wizard = PairingWizard(mock_gateway)
+        wizard.start("Testgerät", "shutter")
+        wizard.send_prog()  # alias
+        assert wizard.state == WizardState.PROG_SENT
+        first_call = mock_gateway.send_raw.call_args_list[0][0][0]
+        assert first_call == "Yr4"
+
+    def test_send_prog_long_without_start_raises(self, mock_gateway):
+        from somfy_rts.wizard import PairingWizard
+        wizard = PairingWizard(mock_gateway)
+        with pytest.raises(RuntimeError, match="ADDR_READY"):
+            wizard.send_prog_long()
+
+    def test_send_prog_pair_without_start_raises(self, mock_gateway):
+        from somfy_rts.wizard import PairingWizard
+        with pytest.raises(RuntimeError, match="ADDR_READY"):
+            PairingWizard(mock_gateway).send_prog_pair()

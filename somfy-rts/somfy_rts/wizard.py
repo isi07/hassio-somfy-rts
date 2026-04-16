@@ -97,20 +97,56 @@ class PairingWizard:
 
     # ---------- Step 3: Send PROG ----------
 
-    def send_prog(self) -> None:
-        """Transmit the PROG command (0x8) to put the motor in pairing mode.
+    def send_prog_long(self) -> None:
+        """Transmit PROG with repeat=8 (Yr8) to put the motor in pairing mode.
 
-        Rolling code is atomically persisted before transmission.
-        Motor expects this within 2 minutes of the original remote's PROG press.
+        Replaces the need to hold the PROG button on the original remote.
+        The motor enters pairing mode and waits for a PROG pair command.
+        Wizard state remains ADDR_READY — follow up with send_prog_pair().
         """
         if self._session.state != WizardState.ADDR_READY:
             raise RuntimeError(
                 f"Wizard nicht im Status ADDR_READY (aktuell: {self._session.state.name})"
             )
+        self._send_prog_telegram(repeat=8)
+        logger.info(
+            "Wizard: PROG_LONG (Yr8) gesendet an %s — Motor im Anlernmodus.",
+            self._session.address,
+        )
 
+    def send_prog_pair(self) -> None:
+        """Transmit PROG with repeat=4 (Yr4) to register the virtual remote.
+
+        The motor must already be in pairing mode (via send_prog_long() or the
+        original remote's PROG button). Advances wizard state to PROG_SENT.
+        Rolling code is atomically persisted before transmission.
+        """
+        if self._session.state != WizardState.ADDR_READY:
+            raise RuntimeError(
+                f"Wizard nicht im Status ADDR_READY (aktuell: {self._session.state.name})"
+            )
+        self._send_prog_telegram(repeat=4)
+        self._session.state = WizardState.PROG_SENT
+        self._session.prog_sent_at = time.monotonic()
+        logger.info(
+            "Wizard PROG_SENT: PROG_PAIR (Yr4) gesendet an %s — warte auf Motor-Bestätigung (%ds).",
+            self._session.address, PROG_TIMEOUT_S,
+        )
+
+    def send_prog(self) -> None:
+        """Alias for send_prog_pair() — backward compatibility."""
+        self.send_prog_pair()
+
+    # ---------- Internal PROG helper ----------
+
+    def _send_prog_telegram(self, repeat: int) -> None:
+        """Build and send a PROG RTS sequence with the given repeat count.
+
+        On GatewayError the session is set to FAILED and the exception re-raised.
+        """
         try:
             seq = rts_module.build_rts_sequence(
-                self._session.address, "PROG", self._session.name
+                self._session.address, "PROG", self._session.name, repeat=repeat
             )
         except ValueError as e:
             self._session.state = WizardState.FAILED
@@ -129,12 +165,6 @@ class PairingWizard:
             raise
 
         log_rts_frame(seq, self._session.address, "PROG", success=True)
-        self._session.state = WizardState.PROG_SENT
-        self._session.prog_sent_at = time.monotonic()
-        logger.info(
-            "Wizard PROG_SENT: PROG gesendet an %s — warte auf Motor-Bestätigung (%ds).",
-            self._session.address, PROG_TIMEOUT_S,
-        )
 
     # ---------- Step 4: Confirm ----------
 

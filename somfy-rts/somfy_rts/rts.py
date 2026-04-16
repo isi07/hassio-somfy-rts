@@ -1,7 +1,7 @@
 """RTS-Protokoll: baut culfw-Befehlssequenz für Somfy RTS Telegramme.
 
 culfw Befehlsformat (433,42 MHz):
-  1. Yr1                          → Wiederholungen auf 1 setzen
+  1. Yr{n}                        → Wiederholungen setzen (Standard: 1, PROG-Anlern: 4, PROG-Lang: 8)
   2. YsA0<CMD><RC><ADDR>          → RTS Telegramm senden
 
   Felder:
@@ -21,8 +21,10 @@ culfw Befehlsformat (433,42 MHz):
 
   Checksumme und Verschlüsselung übernimmt culfw intern.
 
-WICHTIG: repeat=1 (Yr1) ist PFLICHT für Centralis uno RTS —
+WICHTIG: repeat=1 (Yr1) ist PFLICHT für Centralis uno RTS bei normalen Befehlen —
          der Motor ignoriert Telegramme mit repeat>1.
+         Ausnahme: PROG-Befehle können repeat=4 (Anlern) oder repeat=8 (Lang/Anlernmodus)
+         verwenden — diese Werte werden von culfw korrekt verarbeitet.
 
 WICHTIG: Rolling Code wird ATOMAR persistiert BEVOR build_rts_sequence()
          zurückkehrt. Erst dann sendet der Aufrufer die Befehle.
@@ -38,12 +40,17 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class RTSSequence:
-    """Result of build_rts_sequence() — culfw commands plus metadata for frame logging."""
+    """Result of build_rts_sequence() — culfw commands plus metadata for frame logging.
 
-    commands: list[str]  # ["Yr1", "YsA0..."]
+    commands[0] is f"Yr{repeat}" (e.g. "Yr1", "Yr4", "Yr8").
+    commands[1] is the RTS telegram string ("YsA0...").
+    """
+
+    commands: list[str]  # [f"Yr{repeat}", "YsA0..."]
     frame: str           # telegram string = commands[1]
     rc_before: int       # rolling code before increment
     rc_after: int        # rolling code after increment (value encoded in frame)
+    repeat: int = 1      # culfw repeat count (Yr{repeat})
 
 
 def log_rts_frame(
@@ -73,6 +80,7 @@ def log_rts_frame(
             serial_bytes=(seq.frame + "\n").encode("ascii").hex(),
             success=success,
             error=error,
+            repeat=seq.repeat,
         )
 
 # Somfy RTS ctrl-Nibble-Werte (High-Nibble von Byte 1, laut Protokoll-Spec)
@@ -91,7 +99,12 @@ RTS_CTRL_NIBBLE: dict[str, int] = {
 RTS_CMD: dict[str, int] = {k: v << 4 for k, v in RTS_CTRL_NIBBLE.items()}
 
 
-def build_rts_sequence(address: str, action: str, device_name: str = "") -> RTSSequence:
+def build_rts_sequence(
+    address: str,
+    action: str,
+    device_name: str = "",
+    repeat: int = 1,
+) -> RTSSequence:
     """Baut die culfw-Befehlssequenz für ein einzelnes RTS-Telegramm.
 
     Rolling Code wird ATOMAR in /data/somfy_codes.json gespeichert,
@@ -104,9 +117,11 @@ def build_rts_sequence(address: str, action: str, device_name: str = "") -> RTSS
                      (Schicht-1-Befehle OPEN/CLOSE/STOP müssen vorher via
                      resolve_rts_action() übersetzt werden)
         device_name: Optionaler Gerätename für somfy_codes.json
+        repeat:      culfw Wiederholungsanzahl für Yr{repeat}-Kommando (Standard: 1).
+                     Normalbefehle: 1. PROG Anlern (Yr4): 4. PROG Lang (Yr8): 8.
 
     Returns:
-        RTSSequence mit commands ["Yr1", "YsA0..."] und RC-Metadaten für den Frame-Logger.
+        RTSSequence mit commands [f"Yr{repeat}", "YsA0..."] und RC-Metadaten.
 
     Raises:
         ValueError: Bei unbekanntem action-Wert (Schicht-2-Prüfung).
@@ -123,19 +138,20 @@ def build_rts_sequence(address: str, action: str, device_name: str = "") -> RTSS
     telegram = f"YsA0{cmd_byte:02X}{rolling_code:04X}{address.upper()}"
 
     logger.info(
-        "RTS: '%s' | %-7s | Byte1=0x%02X (ctrl=0x%X) | RC=%d | %s",
+        "RTS: '%s' | %-7s | Byte1=0x%02X (ctrl=0x%X) | RC=%d | Yr%d | %s",
         device_name or address,
         action,
         cmd_byte,
         cmd_byte >> 4,
         rolling_code,
+        repeat,
         telegram,
     )
 
-    # Yr1 MUSS vor dem Telegramm gesendet werden
     return RTSSequence(
-        commands=["Yr1", telegram],
+        commands=[f"Yr{repeat}", telegram],
         frame=telegram,
         rc_before=rc_before,
         rc_after=rolling_code,
+        repeat=repeat,
     )
