@@ -4,6 +4,13 @@ Alle nennenswerten Änderungen werden hier dokumentiert.
 Format: [Conventional Commits](https://www.conventionalcommits.org/de/)
 
 
+## [0.3.13] - 2026-04-16
+
+### Behoben
+
+- State-Topics (somfy/{slug}/state, rolling_code, last_command, last_command_attr) beim Löschen eines Geräts ebenfalls mit leerer retained Payload clearen
+
+
 ## [0.3.12] - 2026-04-16
 
 ### Neu hinzugefügt
