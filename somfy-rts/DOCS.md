@@ -76,9 +76,9 @@ Die App unterstützt zwei Betriebsmodi pro Gerät:
 | **A** | 1× Cover-Entität (optimistisch) | Direkte Steuerung, einfachste Einrichtung |
 | **B** | 3× Button + 2× Diagnose-Sensor | Für Template Covers mit Blueprints |
 
-**Modus A** eignet sich für die meisten Anwendungsfälle.  
-**Modus B** empfiehlt sich, wenn Fahrzeitschätzung oder Fensterkontakt-Logik
-über einen Blueprint gewünscht wird.
+**Modus A** eignet sich für die meisten Anwendungsfälle — auch für Blueprints.  
+**Modus B** eignet sich für fortgeschrittene Automatisierungen, die direkt auf
+die einzelnen Buttons (Auf/Zu/Stop) reagieren möchten.
 
 ---
 
@@ -149,11 +149,14 @@ Ein zu niedriger Rolling Code bewirkt, dass der Motor alle Befehle ignoriert.
 
 ## Blueprint Nutzung
 
-Die mitgelieferten Blueprints erstellen Template Covers mit erweiterter Logik.
+Die mitgelieferten Blueprints erstellen Template Covers, deren Zustand über einen
+Kontaktsensor ermittelt wird. Fahrzeitverfolgung entfällt — sie ist unzuverlässig
+bei MY-Taste und manueller Fernbedienung.
 
 ### Voraussetzungen
 
-- Gerät im **Modus B** konfiguriert (3 Buttons + Diagnose-Sensoren)
+- Gerät im **Modus A** konfiguriert (Cover-Entität)
+- Kontaktsensor (z.B. Fensterkontakt, Rollladenkontakt) vorhanden
 - Home Assistant 2024.11.0+
 
 ### Blueprint importieren
@@ -165,47 +168,62 @@ Die mitgelieferten Blueprints erstellen Template Covers mit erweiterter Logik.
 
 ### somfy_rts_awning.yaml — Template Cover für Markisen
 
-Erstellt ein Template Cover mit:
-- Fensterkontakt-Priorität (Schließen blockiert, wenn Fenster offen)
-- Fahrzeit-Schätzung via Timer (Standard: 35 s auf / 38 s zu)
+Erstellt ein Template Cover. Zustand = eingefahren/ausgefahren kommt vom Kontaktsensor.
 
 | Parameter | Beschreibung |
 |-----------|-------------|
-| `somfy_cover_entity` | Die Somfy-Button-Entität (Modus B) |
-| `contact_sensor` | Fensterkontakt-Sensor (optional) |
-| `contact_closed_state` | Zustand = "geschlossen" (z.B. `off`) |
-| `use_travel_time` | Fahrzeit-Schätzung aktivieren |
-| `travel_timer` | Timer-Helfer für Fahrzeitberechnung |
-| `travel_time_open` | Fahrzeit Hochfahren in Sekunden (Standard: 35) |
-| `travel_time_close` | Fahrzeit Runterfahren in Sekunden (Standard: 38) |
+| `somfy_cover_entity` | Die Somfy Cover-Entität (Modus A) |
+| `contact_sensor` | Sensor der den Einfahrzustand anzeigt |
+| `contact_closed_state` | Sensor-Zustand = Markise eingefahren (Standard: `off`) |
 
 ### somfy_rts_shutter.yaml — Template Cover für Rollläden
 
-Identisch zu Markise, mit anderen Standardwerten:
-- Fahrzeit Standard: 40 s auf / 43 s zu
-- Labels: "Hochfahren" / "Runterfahren"
+Identische Struktur, angepasst für Rollläden:
+
+| Parameter | Beschreibung |
+|-----------|-------------|
+| `somfy_cover_entity` | Die Somfy Cover-Entität (Modus A) |
+| `contact_sensor` | Sensor der den Geschlossen-Zustand anzeigt |
+| `contact_closed_state` | Sensor-Zustand = Rollladen geschlossen (Standard: `on`) |
+
+### Zustandsermittlung
+
+Der `value_template` wertet ausschließlich den Kontaktsensor aus:
+- Sensor meldet "eingefahren/geschlossen" → Cover-Zustand: `closed`
+- Sensor meldet alles andere → Cover-Zustand: `open`
+
+Das Cover bleibt damit auch nach manueller Bedienung oder MY-Taste korrekt,
+da der physische Zustand über den Sensor abgebildet wird.
 
 ---
 
 ## MQTT Topics
 
-### Modus A (Cover)
+### Modus A (Cover + PROG-Buttons)
 
 | Topic | Richtung | Inhalt |
 |-------|----------|--------|
-| `homeassistant/cover/<id>/config` | Publish | Discovery-Payload (retain) |
+| `homeassistant/cover/<id>/config` | Publish | Discovery Cover (retain) |
+| `homeassistant/button/<id>_prog_long/config` | Publish | Discovery PROG Lang (retain) |
+| `homeassistant/button/<id>_prog_pair/config` | Publish | Discovery PROG Anlern (retain) |
 | `somfy/<slug>/state` | Publish | `open` / `closed` / `stopped` (retain) |
 | `somfy/<slug>/set` | Subscribe | `OPEN` / `CLOSE` / `STOP` |
+| `somfy/<slug>/cmd` | Subscribe | `PROG_LONG` / `PROG_PAIR` |
+| `somfy/<slug>/rolling_code` | Publish | Aktueller Rolling Code (retain) |
+| `somfy/<slug>/last_command` | Publish | `OPEN` / `CLOSE` / `STOP` / `PROG` (retain) |
 
-### Modus B (Buttons + Diagnose)
+### Modus B (Buttons + PROG-Buttons + Diagnose)
 
 | Topic | Richtung | Inhalt |
 |-------|----------|--------|
+| `homeassistant/button/<id>_prog_long/config` | Publish | Discovery PROG Lang (retain) |
+| `homeassistant/button/<id>_prog_pair/config` | Publish | Discovery PROG Anlern (retain) |
 | `somfy/<slug>/button/auf` | Subscribe | `PRESS` |
 | `somfy/<slug>/button/zu` | Subscribe | `PRESS` |
 | `somfy/<slug>/button/stop` | Subscribe | `PRESS` |
+| `somfy/<slug>/cmd` | Subscribe | `PROG_LONG` / `PROG_PAIR` |
 | `somfy/<slug>/rolling_code` | Publish | Aktueller Rolling Code (retain) |
-| `somfy/<slug>/last_command` | Publish | `OPEN` / `CLOSE` / `STOP` (retain) |
+| `somfy/<slug>/last_command` | Publish | `OPEN` / `CLOSE` / `STOP` / `PROG` (retain) |
 
 ### Gateway
 

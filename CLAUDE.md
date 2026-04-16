@@ -389,21 +389,22 @@ Geräte werden **nicht** in `config.yaml` verwaltet, sondern in `/data/somfy_cod
 
 ## Blueprints (HA 2024.11+)
 
+Blueprints verwenden **Modus A** (Cover-Entität). Fahrzeitverfolgung wurde entfernt —
+sie ist unzuverlässig bei MY-Taste und manueller Fernbedienung.
+Zustand kommt ausschließlich vom Kontaktsensor.
+
 ### `blueprints/template/somfy_rts_awning.yaml` — `domain: template`
 
-Erstellt ein Template Cover für Markisen:
-- Fensterkontakt-Priorität (Schließen blockiert wenn Fenster offen)
-- Fahrzeit-Schätzung via Timer (time_pattern `/1s` nur wenn Timer aktiv)
-- Inputs: somfy_cover_entity, device_class, contact_sensor, contact_closed_state,
-  use_travel_time, travel_timer, travel_time_open (default 35s), travel_time_close (default 38s)
+Erstellt ein Template Cover für Markisen (device_class: awning):
+- Inputs: `somfy_cover_entity`, `contact_sensor`, `contact_closed_state` (default: `"off"`)
+- `value_template`: Sensor == contact_closed_state → `closed`, sonst `open`
+- `availability_template`: beide Entitäten nicht unknown/unavailable
 
 ### `blueprints/template/somfy_rts_shutter.yaml` — `domain: template`
 
-Erstellt ein Template Cover für Rollläden:
+Erstellt ein Template Cover für Rollläden (device_class: shutter):
 - Identische Struktur wie somfy_rts_awning.yaml
-- device_class: shutter (default)
-- travel_time_open default: 40s, travel_time_close default: 43s
-- Labels: "Hochfahren"/"Runterfahren"
+- `contact_closed_state` default: `"on"` (Rollladensensor an = geschlossen)
 
 ---
 
