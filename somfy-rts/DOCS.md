@@ -147,53 +147,115 @@ Ein zu niedriger Rolling Code bewirkt, dass der Motor alle Befehle ignoriert.
 
 ---
 
-## Blueprint Nutzung
+## Template Cover in Home Assistant
 
-Die mitgelieferten Blueprints erstellen Template Covers, deren Zustand über einen
-Kontaktsensor ermittelt wird. Fahrzeitverfolgung entfällt — sie ist unzuverlässig
-bei MY-Taste und manueller Fernbedienung.
+Ein Template Cover kombiniert die Somfy-Entitäten mit einem physischen Sensor
+(z.B. Fensterkontakt, Rollladenkontakt) für einen zuverlässigen Zustand —
+auch nach manueller Bedienung oder MY-Taste.
 
-### Voraussetzungen
+### Modus A vs. Modus B
 
-- Gerät im **Modus A** konfiguriert (Cover-Entität)
-- Kontaktsensor (z.B. Fensterkontakt, Rollladenkontakt) vorhanden
-- Home Assistant 2024.11.0+
+| | Modus A | Modus B |
+|---|---|---|
+| HA-Entität | Cover (optimistisch) | 3 einzelne Buttons |
+| Template Cover | Aktionen via `cover.*` | Aktionen via `button.press` |
+| Empfehlung | Einfachste Einrichtung | Flexibler, für Automatisierungen |
 
-### Blueprint importieren
+**Modus A** eignet sich wenn kein Template Cover benötigt wird — die Cover-Entität
+funktioniert sofort ohne weitere Konfiguration.
 
-1. **Einstellungen → Automatisierungen & Szenen → Blueprints**
-2. **Blueprint importieren** → GitHub URL einfügen:
-   - Markise: `https://github.com/isi07/hassio-somfy-rts/blob/main/blueprints/template/somfy_rts_awning.yaml`
-   - Rollladen: `https://github.com/isi07/hassio-somfy-rts/blob/main/blueprints/template/somfy_rts_shutter.yaml`
+**Modus B** empfiehlt sich für Template Covers: Die drei separaten Buttons
+(Ausfahren / Einfahren / Stop) lassen sich präzise als Aktionen einsetzen und
+reagieren unabhängig voneinander auf Automatisierungen.
 
-### somfy_rts_awning.yaml — Template Cover für Markisen
+### Entity-IDs herausfinden
 
-Erstellt ein Template Cover. Zustand = eingefahren/ausgefahren kommt vom Kontaktsensor.
+**Einstellungen → Entwicklerwerkzeuge → Zustände** — dort alle Entitäten des
+Geräts suchen (nach Gerätename oder `somfy` filtern). Die Entity-IDs in den
+folgenden Beispielen durch die tatsächlichen IDs ersetzen.
 
-| Parameter | Beschreibung |
-|-----------|-------------|
-| `somfy_cover_entity` | Die Somfy Cover-Entität (Modus A) |
-| `contact_sensor` | Sensor der den Einfahrzustand anzeigt |
-| `contact_closed_state` | Sensor-Zustand = Markise eingefahren (Standard: `off`) |
+---
 
-### somfy_rts_shutter.yaml — Template Cover für Rollläden
+### Beispiel: Modus B (Buttons — empfohlen)
 
-Identische Struktur, angepasst für Rollläden:
+Gerät im **Modus B** anlegen. HA erstellt drei Button-Entitäten:
+- `button.meine_markise_ausfahren`
+- `button.meine_markise_einfahren`
+- `button.meine_markise_stop`
 
-| Parameter | Beschreibung |
-|-----------|-------------|
-| `somfy_cover_entity` | Die Somfy Cover-Entität (Modus A) |
-| `contact_sensor` | Sensor der den Geschlossen-Zustand anzeigt |
-| `contact_closed_state` | Sensor-Zustand = Rollladen geschlossen (Standard: `on`) |
+Template Cover in `configuration.yaml`:
 
-### Zustandsermittlung
+```yaml
+template:
+  - cover:
+      name: "Markise Terrasse"
+      device_class: awning
+      state_template: >
+        {% if is_state('input_boolean.markise_eingefahren', 'on') %}
+          closed
+        {% else %}
+          open
+        {% endif %}
+      open_cover:
+        action: button.press
+        target:
+          entity_id: button.meine_markise_ausfahren
+      close_cover:
+        action: button.press
+        target:
+          entity_id: button.meine_markise_einfahren
+      stop_cover:
+        action: button.press
+        target:
+          entity_id: button.meine_markise_stop
+      availability_template: >
+        {{ is_state('binary_sensor.somfy_rts_gateway_verbindung', 'on')
+           and states('input_boolean.markise_eingefahren')
+           not in ['unknown', 'unavailable'] }}
+```
 
-Der `value_template` wertet ausschließlich den Kontaktsensor aus:
-- Sensor meldet "eingefahren/geschlossen" → Cover-Zustand: `closed`
-- Sensor meldet alles andere → Cover-Zustand: `open`
+Den Sensor (`input_boolean.markise_eingefahren`) durch den eigenen Kontaktsensor
+ersetzen und den `state_template`-Ausdruck entsprechend anpassen:
+- `is_state('binary_sensor.mein_sensor', 'on')` → `closed` wenn Sensor aktiv
+- `is_state('binary_sensor.mein_sensor', 'off')` → `closed` wenn Sensor inaktiv
 
-Das Cover bleibt damit auch nach manueller Bedienung oder MY-Taste korrekt,
-da der physische Zustand über den Sensor abgebildet wird.
+---
+
+### Beispiel: Modus A (Cover-Entität — einfacher)
+
+Gerät im **Modus A** anlegen. HA erstellt eine Cover-Entität:
+- `cover.meine_markise`
+
+Template Cover in `configuration.yaml`:
+
+```yaml
+template:
+  - cover:
+      name: "Markise Terrasse"
+      device_class: awning
+      state_template: >
+        {% if is_state('input_boolean.markise_eingefahren', 'on') %}
+          closed
+        {% else %}
+          open
+        {% endif %}
+      open_cover:
+        action: cover.open_cover
+        target:
+          entity_id: cover.meine_markise
+      close_cover:
+        action: cover.close_cover
+        target:
+          entity_id: cover.meine_markise
+      stop_cover:
+        action: cover.stop_cover
+        target:
+          entity_id: cover.meine_markise
+      availability_template: >
+        {{ is_state('binary_sensor.somfy_rts_gateway_verbindung', 'on')
+           and states('input_boolean.markise_eingefahren')
+           not in ['unknown', 'unavailable'] }}
+```
 
 ---
 

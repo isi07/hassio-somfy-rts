@@ -14,7 +14,7 @@
 - [App-Konfigurationsoptionen](#app-konfigurationsoptionen)
 - [Gerätetypen](#gerätetypen-device_profilesjson)
 - [MQTT Topics](#mqtt-topics)
-- [Blueprints](#blueprints-ha-202411)
+- [Template Cover](#template-cover-ha-202411)
 - [CI/CD](#cicd-github-actions)
 - [Anlern-Wizard](#anlern-wizard-wizardpy)
 - [Dokumentationspflicht](#dokumentationspflicht)
@@ -215,10 +215,6 @@ hassio-somfy-rts/
 │       ├── device.py                  # Device-Klasse (alle 7 Typen, Modus A/B)
 │       ├── wizard.py                  # PairingWizard (5-Schritt Anlern-Flow)
 │       └── device_profiles.json      # Gerätetyp-Definitionen
-└── blueprints/
-    └── template/
-        ├── somfy_rts_awning.yaml      # Template Cover Markise: Fensterkontakt + Fahrzeit
-        └── somfy_rts_shutter.yaml     # Template Cover Rollladen: Fensterkontakt + Fahrzeit
 ```
 
 ---
@@ -257,7 +253,7 @@ BaseGateway (ABC)          # gateway.py
 | Modus | Discovery | Verwendung |
 |-------|-----------|------------|
 | A | Cover-Entity (optimistisch) + 3 Diagnose-Sensoren + 2 PROG-Buttons | Standalone, direkte Steuerung |
-| B | 3 Buttons + 2 PROG-Buttons + 2 Diagnose-Sensoren | Template Cover in HA (Blueprint) |
+| B | 3 Buttons + 2 PROG-Buttons + 2 Diagnose-Sensoren | Template Cover in HA (manuell, siehe DOCS.md) |
 
 ### PROG-Buttons (beide Modi, entity_category: config)
 
@@ -387,24 +383,16 @@ Geräte werden **nicht** in `config.yaml` verwaltet, sondern in `/data/somfy_cod
 
 ---
 
-## Blueprints (HA 2024.11+)
+## Template Cover (HA 2024.11+)
 
-Blueprints verwenden **Modus A** (Cover-Entität). Fahrzeitverfolgung wurde entfernt —
-sie ist unzuverlässig bei MY-Taste und manueller Fernbedienung.
-Zustand kommt ausschließlich vom Kontaktsensor.
+Template Covers verbinden Somfy-Entitäten mit einem physischen Kontaktsensor für
+einen zuverlässigen Zustand — auch nach manueller Bedienung oder MY-Taste.
+Vollständige YAML-Beispiele für Modus A und Modus B in **DOCS.md**.
 
-### `blueprints/template/somfy_rts_awning.yaml` — `domain: template`
-
-Erstellt ein Template Cover für Markisen (device_class: awning):
-- Inputs: `somfy_cover_entity`, `contact_sensor`, `contact_closed_state` (default: `"off"`)
-- `value_template`: Sensor == contact_closed_state → `closed`, sonst `open`
-- `availability_template`: beide Entitäten nicht unknown/unavailable
-
-### `blueprints/template/somfy_rts_shutter.yaml` — `domain: template`
-
-Erstellt ein Template Cover für Rollläden (device_class: shutter):
-- Identische Struktur wie somfy_rts_awning.yaml
-- `contact_closed_state` default: `"on"` (Rollladensensor an = geschlossen)
+- **Modus B** (empfohlen): Aktionen via `button.press` auf die drei Button-Entitäten
+- **Modus A**: Aktionen via `cover.open_cover` / `cover.close_cover` / `cover.stop_cover`
+- Zustand immer über externen Kontaktsensor — nie über Fahrzeitverfolgung
+- Availability über `binary_sensor.somfy_rts_gateway_verbindung`
 
 ---
 
@@ -440,7 +428,7 @@ Der `PairingWizard` steuert den 5-stufigen Anlern-Flow:
 | `send_prog()` | Yr4 | Alias für `send_prog_pair()` | PROG_SENT |
 
 **Modus A/B** ist in der Web-UI wählbar: Anlern-Wizard (Schritt 1) und Import-Dialog
-bieten je ein Dropdown — `A` = Cover-Entity, `B` = Buttons + Sensoren für Blueprint.
+bieten je ein Dropdown — `A` = Cover-Entity, `B` = Buttons + Sensoren für Template Cover.
 
 **ioBroker-Import:** `PairingWizard.import_from_iobroker(name, type, address, rolling_code, mode="A")`  
 Rolling Code muss ≥ letzter ioBroker-Wert sein (Sicherheitsmarge +10 empfohlen).
@@ -527,7 +515,7 @@ aktualisiert werden:
 - **CLAUDE.md** — bei Änderungen an Dateistruktur, Modulnamen,
   Konfigurationsfeldern, Workflows
 - **somfy-rts/DOCS.md** — bei Änderungen an `config.yaml`-Optionen,
-  neuen Features, Anlern-Prozess, Blueprints
+  neuen Features, Anlern-Prozess, Template Cover
 - **README.md** — bei neuen Features oder geänderten Installationsschritten
 - **somfy-rts/CHANGELOG.md** — wird automatisch via git-cliff generiert,
   **NICHT manuell bearbeiten**
