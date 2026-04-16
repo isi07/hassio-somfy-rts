@@ -4,10 +4,12 @@ Alle nennenswerten Änderungen werden hier dokumentiert.
 Format: [Conventional Commits](https://www.conventionalcommits.org/de/)
 
 
-## [0.3.10] - 2026-04-15
+## [0.3.11] - 2026-04-16
 
-### Fehlerbehebungen
+### Neu hinzugefügt
 
-- Gateway-Verbindung zeigt Online/Offline, _FALLBACK_PROFILE auf shutter-Profil
+- PROG Lang (Yr8) und PROG Anlern (Yr4), repeat-Parameter im Frame-Log
+- PROG Lang und PROG Anlern als MQTT Discovery Entitäten in HA (entity_category: config)
+- Blueprints vereinfacht — Kontaktsensor statt Fahrzeitverfolgung
 
 
