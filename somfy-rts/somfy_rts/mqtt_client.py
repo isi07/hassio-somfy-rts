@@ -364,18 +364,21 @@ class MQTTClient:
     # ---------- Deregistrierung ----------
 
     def unregister_device(self, device: DeviceConfig) -> None:
-        """Löscht alle HA Discovery-Topics eines Geräts durch leere retained Payloads.
+        """Löscht alle HA Discovery- und State-Topics eines Geräts durch leere retained Payloads.
 
         HA entfernt die Entitäten automatisch, sobald das zugehörige Discovery-Topic
-        eine leere retained Nachricht empfängt.
+        eine leere retained Nachricht empfängt. Die State-Topics (somfy/{slug}/…)
+        werden ebenfalls gecleart, damit keine veralteten Werte im Broker verbleiben.
 
         Args:
             device: Gerätekonfiguration des zu löschenden Geräts.
         """
         for topic in discovery_topics(device):
             self._client.publish(topic, "", retain=True)
+        for topic in state_topics(device):
+            self._client.publish(topic, "", retain=True)
         logger.info(
-            "Discovery-Topics für '%s' (%s) gecleart.", device.name, device.address
+            "Discovery- und State-Topics für '%s' (%s) gecleart.", device.name, device.address
         )
 
     # ---------- Publish ----------
@@ -447,6 +450,28 @@ def _sub_device(device: DeviceConfig, profile: Optional[Dict] = None) -> dict:
         "manufacturer": "Somfy",
         "via_device": "somfy_rts_gateway",
     }
+
+
+def state_topics(device: DeviceConfig) -> list[str]:
+    """Gibt alle somfy/-State-Topics zurück, die beim Löschen gecleart werden müssen.
+
+    Diese Topics enthalten retained Werte (Status, Rolling Code, letzter Befehl)
+    und müssen beim Löschen eines Geräts explizit auf leere Payload gesetzt werden,
+    damit keine veralteten Werte im MQTT-Broker verbleiben.
+
+    Args:
+        device: Gerätekonfiguration (name, type, address, mode).
+
+    Returns:
+        Liste aller somfy/{slug}/… State-Topics des Geräts.
+    """
+    slug = device.slug
+    return [
+        f"{MQTT_TOPIC_PREFIX}/{slug}/state",
+        f"{MQTT_TOPIC_PREFIX}/{slug}/rolling_code",
+        f"{MQTT_TOPIC_PREFIX}/{slug}/last_command",
+        f"{MQTT_TOPIC_PREFIX}/{slug}/last_command_attr",
+    ]
 
 
 def discovery_topics(device: DeviceConfig) -> list[str]:

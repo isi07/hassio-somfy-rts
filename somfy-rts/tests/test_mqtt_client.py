@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 
 from somfy_rts.config import DeviceConfig
-from somfy_rts.mqtt_client import HA_DISCOVERY, MQTTClient, discovery_topics
+from somfy_rts.mqtt_client import HA_DISCOVERY, MQTT_TOPIC_PREFIX, MQTTClient, discovery_topics, state_topics
 
 
 # ---------- Fixtures ----------
@@ -172,7 +172,7 @@ class TestUnregisterDeviceModeA:
                     f"Topic {topic} not published with retain=True"
                 )
 
-    def test_exactly_six_topics_cleared(self, mqtt_client_with_mock, device_a):
+    def test_exactly_six_discovery_topics_cleared(self, mqtt_client_with_mock, device_a):
         client, mock_paho = mqtt_client_with_mock
         client.unregister_device(device_a)
 
@@ -182,12 +182,38 @@ class TestUnregisterDeviceModeA:
         ]
         assert len(cleared) == 6
 
+    def test_state_topics_also_cleared(self, mqtt_client_with_mock, device_a):
+        client, mock_paho = mqtt_client_with_mock
+        client.unregister_device(device_a)
+
+        published_topics = {c.args[0] for c in mock_paho.publish.call_args_list}
+        for topic in state_topics(device_a):
+            assert topic in published_topics, f"State-Topic nicht gecleart: {topic}"
+
+    def test_state_topics_payload_empty(self, mqtt_client_with_mock, device_a):
+        client, mock_paho = mqtt_client_with_mock
+        client.unregister_device(device_a)
+
+        for c in mock_paho.publish.call_args_list:
+            if c.args[0] in state_topics(device_a):
+                assert c.args[1] == "", f"State-Topic {c.args[0]} hatte nicht-leere Payload"
+
+    def test_state_topics_retain(self, mqtt_client_with_mock, device_a):
+        client, mock_paho = mqtt_client_with_mock
+        client.unregister_device(device_a)
+
+        for c in mock_paho.publish.call_args_list:
+            if c.args[0] in state_topics(device_a):
+                assert c.kwargs.get("retain") is True or c.args[2] is True, (
+                    f"State-Topic {c.args[0]} nicht mit retain=True publiziert"
+                )
+
 
 # ---------- unregister_device() — Modus B ----------
 
 
 class TestUnregisterDeviceModeB:
-    def test_publishes_empty_payload_on_all_topics(self, mqtt_client_with_mock, device_b):
+    def test_publishes_empty_payload_on_all_discovery_topics(self, mqtt_client_with_mock, device_b):
         client, mock_paho = mqtt_client_with_mock
         client.unregister_device(device_b)
 
@@ -195,7 +221,7 @@ class TestUnregisterDeviceModeB:
         expected = set(discovery_topics(device_b))
         assert expected.issubset(published_topics)
 
-    def test_exactly_seven_topics_cleared(self, mqtt_client_with_mock, device_b):
+    def test_exactly_seven_discovery_topics_cleared(self, mqtt_client_with_mock, device_b):
         client, mock_paho = mqtt_client_with_mock
         client.unregister_device(device_b)
 
@@ -213,3 +239,45 @@ class TestUnregisterDeviceModeB:
         cover_topic = f"{HA_DISCOVERY}/cover/{uid}/config"
         published_topics = {c.args[0] for c in mock_paho.publish.call_args_list}
         assert cover_topic not in published_topics
+
+    def test_state_topics_also_cleared(self, mqtt_client_with_mock, device_b):
+        client, mock_paho = mqtt_client_with_mock
+        client.unregister_device(device_b)
+
+        published_topics = {c.args[0] for c in mock_paho.publish.call_args_list}
+        for topic in state_topics(device_b):
+            assert topic in published_topics, f"State-Topic nicht gecleart: {topic}"
+
+
+# ---------- state_topics() ----------
+
+
+class TestStateTopics:
+    def test_contains_state(self, device_a):
+        slug = device_a.slug
+        assert f"{MQTT_TOPIC_PREFIX}/{slug}/state" in state_topics(device_a)
+
+    def test_contains_rolling_code(self, device_a):
+        slug = device_a.slug
+        assert f"{MQTT_TOPIC_PREFIX}/{slug}/rolling_code" in state_topics(device_a)
+
+    def test_contains_last_command(self, device_a):
+        slug = device_a.slug
+        assert f"{MQTT_TOPIC_PREFIX}/{slug}/last_command" in state_topics(device_a)
+
+    def test_contains_last_command_attr(self, device_a):
+        slug = device_a.slug
+        assert f"{MQTT_TOPIC_PREFIX}/{slug}/last_command_attr" in state_topics(device_a)
+
+    def test_total_count(self, device_a):
+        """Genau 4 State-Topics pro Gerät (unabhängig vom Modus)."""
+        assert len(state_topics(device_a)) == 4
+
+    def test_same_count_mode_b(self, device_b):
+        assert len(state_topics(device_b)) == 4
+
+    def test_slug_derived_from_name(self, device_a):
+        """Alle Topics enthalten den korrekt abgeleiteten Slug."""
+        slug = device_a.slug
+        for topic in state_topics(device_a):
+            assert f"{MQTT_TOPIC_PREFIX}/{slug}/" in topic
