@@ -4,6 +4,14 @@ Alle nennenswerten Änderungen werden hier dokumentiert.
 Format: [Conventional Commits](https://www.conventionalcommits.org/de/)
 
 
+## [0.3.14] - 2026-04-16
+
+### Dokumentation
+
+- Blueprints entfernt — Template Cover Beispiele (Modus A + B) direkt in DOCS.md
+- .claude/worktrees/ und .claude/projects/ zu .gitignore hinzugefügt
+
+
 ## [0.3.13] - 2026-04-16
 
 ### Behoben
