@@ -9,10 +9,14 @@ ausschließlich aus device_profiles.json — keine separaten Klassen pro Typ.
 
 Diagnose-Sensoren (beide Modi):
   rolling_code   — aktueller Rolling-Code-Wert nach jedem Befehl
-  last_command   — letzter gesendeter Befehl (OPEN/CLOSE/STOP/MY/…)
+  last_command   — letzter gesendeter Befehl (OPEN/CLOSE/STOP/MY/PROG/…)
                    json_attributes: {"raw_frame": "YsA0…"} (vollständiger Telegram-String)
 Nur Modus A zusätzlich:
   device_address — statische Hex-Adresse des virtuellen Senders
+
+PROG-Befehle (beide Modi):
+  PROG_LONG → build_rts_sequence("PROG", repeat=8) — Motor in Anlernmodus
+  PROG_PAIR → build_rts_sequence("PROG", repeat=4) — Virtuellen Sender anlernen
 """
 
 import json
@@ -139,18 +143,39 @@ class Device:
     def _handle_command(self, command: str) -> None:
         """Verarbeitet einen Befehl: Rolling Code atomar persistieren → RTS senden → Status melden.
 
-        Akzeptiert Schicht-1-Begriffe (OPEN/CLOSE/STOP — von Modus A MQTT-Cover)
-        sowie Schicht-2-Begriffe (UP/DOWN/MY/MY_UP/MY_DOWN/PROG — von Modus B Buttons).
+        Akzeptiert Schicht-1-Begriffe (OPEN/CLOSE/STOP — von Modus A MQTT-Cover),
+        Schicht-2-Begriffe (UP/DOWN/MY/MY_UP/MY_DOWN/PROG — von Modus B Buttons),
+        sowie PROG_LONG (Yr8) und PROG_PAIR (Yr4) — gültig in beiden Modi.
 
         Modus A: Schicht 1 → resolve_rts_action() → Schicht 2 → build_rts_sequence()
         Modus B: Schicht-2-Begriff direkt aus rts-Feld des Profils → build_rts_sequence()
+        PROG_LONG/PROG_PAIR: direkt → PROG mit repeat=8/4 (kein command_map, beide Modi)
         """
         command = command.upper()
         # Layer 1 (Schicht 1, HA-Semantik):  OPEN, CLOSE, STOP  → wird per command_map übersetzt
         # Layer 2 (Schicht 2, RTS-Protokoll): UP, DOWN, MY       → direkt (Mode B, MY_*, PROG)
-        _VALID = {"OPEN", "CLOSE", "STOP", "UP", "DOWN", "MY", "PROG", "MY_UP", "MY_DOWN"}
+        # PROG mit repeat:                    PROG_LONG (Yr8), PROG_PAIR (Yr4) → beide Modi
+        _VALID = {
+            "OPEN", "CLOSE", "STOP",
+            "UP", "DOWN", "MY", "PROG", "MY_UP", "MY_DOWN",
+            "PROG_LONG", "PROG_PAIR",
+        }
         if command not in _VALID:
             logger.warning("Unbekannter Befehl '%s' für '%s'.", command, self._device.name)
+            return
+
+        # PROG_LONG / PROG_PAIR: direkte PROG-Sequenz mit spezifischem repeat (beide Modi).
+        # Kein command_map nötig — repeat-Info ist im Befehlsnamen kodiert.
+        if command in ("PROG_LONG", "PROG_PAIR"):
+            repeat = 8 if command == "PROG_LONG" else 4
+            logger.info(
+                "Befehl für '%s': %s → PROG Yr%d",
+                self._device.name, command, repeat,
+            )
+            seq = self._send_rts("PROG", repeat=repeat)
+            if seq is None:
+                return
+            self._publish_diagnostics(last_command="PROG", raw_frame=seq.frame)
             return
 
         # Mode A: Schicht-1-Befehle via resolve_rts_action() in Schicht 2 übersetzen
@@ -179,15 +204,19 @@ class Device:
         elif self._device.mode == "B":
             self._publish_diagnostics(last_command=rts_action, raw_frame=seq.frame)
 
-    def _send_rts(self, action: str) -> Optional[RTSSequence]:
+    def _send_rts(self, action: str, repeat: int = 1) -> Optional[RTSSequence]:
         """Baut RTS-Sequenz (RC atomar persistiert) und sendet beide Befehle via Gateway.
+
+        Args:
+            action: Schicht-2-Befehl (UP/DOWN/MY/PROG/MY_UP/MY_DOWN).
+            repeat: culfw Wiederholungsanzahl (1=Normal, 4=PROG Anlern, 8=PROG Lang).
 
         Returns:
             RTSSequence bei Erfolg (enthält frame für raw_frame-Attribut), None bei Fehler.
         """
         try:
             seq = rts_module.build_rts_sequence(
-                self._device.address, action, self._device.name
+                self._device.address, action, self._device.name, repeat=repeat
             )
         except ValueError as e:
             logger.error("RTS-Protokollfehler bei '%s': %s", self._device.name, e)

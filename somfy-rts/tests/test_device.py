@@ -171,3 +171,91 @@ class TestResolveRtsAction:
         """Unknown device type has no command_map — OPEN passes through unchanged."""
         from somfy_rts.device import resolve_rts_action
         assert resolve_rts_action("OPEN", "unknown_type") == "OPEN"
+
+    def test_prog_long_passthrough(self):
+        """PROG_LONG passes through resolve_rts_action unchanged (not in Layer 1)."""
+        from somfy_rts.device import resolve_rts_action
+        assert resolve_rts_action("PROG_LONG", "awning") == "PROG_LONG"
+
+    def test_prog_pair_passthrough(self):
+        """PROG_PAIR passes through resolve_rts_action unchanged (not in Layer 1)."""
+        from somfy_rts.device import resolve_rts_action
+        assert resolve_rts_action("PROG_PAIR", "shutter") == "PROG_PAIR"
+
+
+class TestProgLongAndProgPairCommands:
+    """Tests for PROG_LONG (Yr8) and PROG_PAIR (Yr4) in _handle_command()."""
+
+    def test_prog_long_mode_a_sends_yr8(self, tmp_codes_path):
+        """Mode A: PROG_LONG → PROG with Yr8 as first gateway command."""
+        dev, gw, _ = _make_device("shutter", mode="A")
+        dev._handle_command("PROG_LONG")
+        sent = [c.args[0] for c in gw.send_raw.call_args_list]
+        assert sent[0] == "Yr8", f"Expected Yr8, got {sent[0]!r}"
+        assert sent[1][4:6] == "80", "PROG byte must be 0x80"
+
+    def test_prog_pair_mode_a_sends_yr4(self, tmp_codes_path):
+        """Mode A: PROG_PAIR → PROG with Yr4 as first gateway command."""
+        dev, gw, _ = _make_device("shutter", mode="A")
+        dev._handle_command("PROG_PAIR")
+        sent = [c.args[0] for c in gw.send_raw.call_args_list]
+        assert sent[0] == "Yr4", f"Expected Yr4, got {sent[0]!r}"
+        assert sent[1][4:6] == "80", "PROG byte must be 0x80"
+
+    def test_prog_long_mode_b_sends_yr8(self, tmp_codes_path):
+        """Mode B: PROG_LONG also sends Yr8 — works for both modes."""
+        dev, gw, _ = _make_device("awning", mode="B")
+        dev._handle_command("PROG_LONG")
+        sent = [c.args[0] for c in gw.send_raw.call_args_list]
+        assert sent[0] == "Yr8"
+        assert sent[1][4:6] == "80"
+
+    def test_prog_pair_mode_b_sends_yr4(self, tmp_codes_path):
+        """Mode B: PROG_PAIR sends Yr4 — works for both modes."""
+        dev, gw, _ = _make_device("awning", mode="B")
+        dev._handle_command("PROG_PAIR")
+        sent = [c.args[0] for c in gw.send_raw.call_args_list]
+        assert sent[0] == "Yr4"
+        assert sent[1][4:6] == "80"
+
+    def test_prog_long_publishes_diagnostic_prog(self, tmp_codes_path):
+        """PROG_LONG publishes 'PROG' as last_command diagnostic (not 'PROG_LONG')."""
+        dev, _, mqtt = _make_device("shutter", mode="A")
+        dev._handle_command("PROG_LONG")
+        diag_calls = {c.args[1]: c.args[2] for c in mqtt.publish_diagnostic.call_args_list}
+        assert diag_calls.get("last_command") == "PROG"
+
+    def test_prog_pair_publishes_diagnostic_prog(self, tmp_codes_path):
+        """PROG_PAIR publishes 'PROG' as last_command diagnostic (not 'PROG_PAIR')."""
+        dev, _, mqtt = _make_device("shutter", mode="A")
+        dev._handle_command("PROG_PAIR")
+        diag_calls = {c.args[1]: c.args[2] for c in mqtt.publish_diagnostic.call_args_list}
+        assert diag_calls.get("last_command") == "PROG"
+
+    def test_prog_long_does_not_publish_cover_state(self, tmp_codes_path):
+        """PROG_LONG must not publish a cover state update (admin operation, not movement)."""
+        dev, _, mqtt = _make_device("shutter", mode="A")
+        dev._handle_command("PROG_LONG")
+        mqtt.publish_state.assert_not_called()
+
+    def test_prog_pair_does_not_publish_cover_state(self, tmp_codes_path):
+        """PROG_PAIR must not publish a cover state update."""
+        dev, _, mqtt = _make_device("shutter", mode="A")
+        dev._handle_command("PROG_PAIR")
+        mqtt.publish_state.assert_not_called()
+
+    def test_prog_long_awning_not_inverted_by_command_map(self, tmp_codes_path):
+        """For awning: PROG_LONG bypasses command_map — still sends PROG (0x80), not some other byte."""
+        dev, gw, _ = _make_device("awning", mode="A")
+        dev._handle_command("PROG_LONG")
+        sent = [c.args[0] for c in gw.send_raw.call_args_list]
+        # Must be Yr8 + PROG telegram (0x80), not affected by awning's OPEN↔DOWN inversion
+        assert sent[0] == "Yr8"
+        assert sent[1][4:6] == "80"
+
+    def test_prog_long_lowercase_accepted(self, tmp_codes_path):
+        """_handle_command uppercases input — 'prog_long' is same as 'PROG_LONG'."""
+        dev, gw, _ = _make_device("shutter", mode="A")
+        dev._handle_command("prog_long")
+        sent = [c.args[0] for c in gw.send_raw.call_args_list]
+        assert sent[0] == "Yr8"

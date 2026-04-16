@@ -8,9 +8,14 @@ Discovery-Struktur:
     Modus A: cover entity (optimistisch, device_class je Gerätetyp)
              + 3x sensor (entity_category: diagnostic):
                rolling_code, last_command (+ raw_frame Attribut), device_address
-    Modus B: 3x button (entity_category: config)
+             + 2x button (entity_category: config): PROG Lang (Yr8), PROG Anlern (Yr4)
+    Modus B: 3x button (entity_category: config): Auf, Zu, Stop
+             + 2x button (entity_category: config): PROG Lang (Yr8), PROG Anlern (Yr4)
              + 2x sensor (entity_category: diagnostic):
                rolling_code, last_command (+ raw_frame Attribut)
+
+  PROG-Buttons (beide Modi): command_topic somfy/{slug}/cmd,
+    payload_press PROG_LONG (Yr8) / PROG_PAIR (Yr4)
 
 Availability: LWT auf Topic 'cul2mqtt/status' (online/offline, retain=True).
 Alle Discovery-Payloads enthalten availability mit payload_available='online'
@@ -249,7 +254,11 @@ class MQTTClient:
             self._client.publish(s_disc, json.dumps(s_payload), retain=True)
 
         self._subscribe(command_topic, command_handler)
-        logger.info("[Modus A] '%s' → Cover + 3 Diagnose-Sensoren auf %s", device.name, command_topic)
+
+        # PROG Lang + PROG Anlern Buttons (entity_category: config) — beide Modi
+        self._register_prog_buttons(device, command_handler, sub_dev)
+
+        logger.info("[Modus A] '%s' → Cover + 3 Diagnose-Sensoren + 2 PROG-Buttons auf %s", device.name, command_topic)
 
     def _register_mode_b(
         self,
@@ -310,7 +319,47 @@ class MQTTClient:
             disc_topic = f"{HA_DISCOVERY}/sensor/{device.unique_id_base}_{sensor_id}/config"
             self._client.publish(disc_topic, json.dumps(s_payload), retain=True)
 
-        logger.info("[Modus B] '%s' → 3 Buttons + 2 Sensoren", device.name)
+        # PROG Lang + PROG Anlern Buttons (entity_category: config) — beide Modi
+        self._register_prog_buttons(device, command_handler, sub_dev)
+
+        logger.info("[Modus B] '%s' → 3 Buttons + 2 PROG-Buttons + 2 Sensoren", device.name)
+
+    def _register_prog_buttons(
+        self,
+        device: DeviceConfig,
+        command_handler: Callable[[str], None],
+        sub_dev: dict,
+    ) -> None:
+        """Registriert PROG Lang (Yr8) und PROG Anlern (Yr4) als HA-Button-Entitäten.
+
+        Gilt für ALLE Gerätetypen und BEIDE Modi (A + B).
+        Beide Buttons teilen das Topic somfy/{slug}/cmd; Payload differenziert die Aktion.
+        """
+        prefix = MQTT_TOPIC_PREFIX
+        cmd_topic = f"{prefix}/{device.slug}/cmd"
+        avail = _avail_block()
+
+        prog_buttons = [
+            ("prog_long", f"{device.name} PROG Lang",   "mdi:timer",   "PROG_LONG"),
+            ("prog_pair", f"{device.name} PROG Anlern", "mdi:antenna", "PROG_PAIR"),
+        ]
+
+        for btn_key, btn_name, icon, payload_press in prog_buttons:
+            btn_payload: Dict = {
+                "name": btn_name,
+                "unique_id": f"{device.unique_id_base}_{btn_key}",
+                "command_topic": cmd_topic,
+                "payload_press": payload_press,
+                "entity_category": "config",
+                "icon": icon,
+                "availability": avail,
+                "device": sub_dev,
+                "origin": ORIGIN,
+            }
+            disc_topic = f"{HA_DISCOVERY}/button/{device.unique_id_base}_{btn_key}/config"
+            self._client.publish(disc_topic, json.dumps(btn_payload), retain=True)
+
+        self._subscribe(cmd_topic, command_handler)
 
     # ---------- Publish ----------
 

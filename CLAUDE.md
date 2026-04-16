@@ -256,15 +256,25 @@ BaseGateway (ABC)          # gateway.py
 
 | Modus | Discovery | Verwendung |
 |-------|-----------|------------|
-| A | Cover-Entity (optimistisch) + 3 Diagnose-Sensoren | Standalone, direkte Steuerung |
-| B | 3 Buttons + 2 Diagnose-Sensoren | Template Cover in HA (Blueprint) |
+| A | Cover-Entity (optimistisch) + 3 Diagnose-Sensoren + 2 PROG-Buttons | Standalone, direkte Steuerung |
+| B | 3 Buttons + 2 PROG-Buttons + 2 Diagnose-Sensoren | Template Cover in HA (Blueprint) |
+
+### PROG-Buttons (beide Modi, entity_category: config)
+
+| Button | unique_id Suffix | Topic | Payload |
+|--------|-----------------|-------|---------|
+| PROG Lang | `_prog_long` | `somfy/<slug>/cmd` | `PROG_LONG` → PROG Yr8 |
+| PROG Anlern | `_prog_pair` | `somfy/<slug>/cmd` | `PROG_PAIR` → PROG Yr4 |
+
+Beide Buttons erscheinen in HA unter **Konfiguration** des jeweiligen Geräts.
+Kein Cover-State-Update bei PROG_LONG/PROG_PAIR — nur `rolling_code` + `last_command` (="PROG").
 
 ### Diagnose-Sensoren (beide Modi)
 
 | Sensor | Topic | Inhalt |
 |--------|-------|--------|
 | `rolling_code` | `somfy/<slug>/rolling_code` | aktueller RC nach jedem Befehl (integer) |
-| `last_command` | `somfy/<slug>/last_command` | letzter Befehl (OPEN/CLOSE/STOP/MY) |
+| `last_command` | `somfy/<slug>/last_command` | letzter Befehl (OPEN/CLOSE/STOP/MY/PROG) |
 | `last_command` Attribut | `somfy/<slug>/last_command_attr` | `{"raw_frame": "YsA0…"}` — vollständiger Telegram-String |
 
 ### Nur Modus A zusätzlich
@@ -333,7 +343,7 @@ Geräte werden **nicht** in `config.yaml` verwaltet, sondern in `/data/somfy_cod
 
 ## MQTT Topics
 
-### Modus A (Cover + Diagnose-Sensoren)
+### Modus A (Cover + Diagnose-Sensoren + PROG-Buttons)
 
 | Topic | Richtung | Inhalt |
 |---|---|---|
@@ -341,22 +351,28 @@ Geräte werden **nicht** in `config.yaml` verwaltet, sondern in `/data/somfy_cod
 | `homeassistant/sensor/<id>_rolling_code/config` | Publish | Discovery Rolling Code (retain) |
 | `homeassistant/sensor/<id>_last_command/config` | Publish | Discovery Letzter Befehl (retain) |
 | `homeassistant/sensor/<id>_device_address/config` | Publish | Discovery Adresse (retain) |
+| `homeassistant/button/<id>_prog_long/config` | Publish | Discovery PROG Lang (retain) |
+| `homeassistant/button/<id>_prog_pair/config` | Publish | Discovery PROG Anlern (retain) |
 | `somfy/<slug>/state` | Publish | open / closed / stopped (retain) |
 | `somfy/<slug>/set` | Subscribe | OPEN / CLOSE / STOP |
+| `somfy/<slug>/cmd` | Subscribe | PROG_LONG / PROG_PAIR |
 | `somfy/<slug>/rolling_code` | Publish | aktueller RC nach Befehl (retain) |
-| `somfy/<slug>/last_command` | Publish | OPEN/CLOSE/STOP/MY (retain) |
+| `somfy/<slug>/last_command` | Publish | OPEN/CLOSE/STOP/MY/PROG (retain) |
 | `somfy/<slug>/last_command_attr` | Publish | `{"raw_frame": "YsA0…"}` (retain) |
 | `somfy/<slug>/device_address` | Publish | Hex-Adresse, einmalig beim Setup (retain) |
 
-### Modus B (Buttons + Diagnose-Sensoren)
+### Modus B (Buttons + PROG-Buttons + Diagnose-Sensoren)
 
 | Topic | Richtung | Inhalt |
 |---|---|---|
+| `homeassistant/button/<id>_prog_long/config` | Publish | Discovery PROG Lang (retain) |
+| `homeassistant/button/<id>_prog_pair/config` | Publish | Discovery PROG Anlern (retain) |
 | `somfy/<slug>/button/auf` | Subscribe | PRESS |
 | `somfy/<slug>/button/zu` | Subscribe | PRESS |
 | `somfy/<slug>/button/stop` | Subscribe | PRESS |
+| `somfy/<slug>/cmd` | Subscribe | PROG_LONG / PROG_PAIR |
 | `somfy/<slug>/rolling_code` | Publish | aktueller RC (retain) |
-| `somfy/<slug>/last_command` | Publish | OPEN/CLOSE/STOP/MY (retain) |
+| `somfy/<slug>/last_command` | Publish | OPEN/CLOSE/STOP/MY/PROG (retain) |
 | `somfy/<slug>/last_command_attr` | Publish | `{"raw_frame": "YsA0…"}` (retain) |
 
 ### Gateway
