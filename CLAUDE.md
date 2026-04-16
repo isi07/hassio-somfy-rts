@@ -666,3 +666,4 @@ Tag und `config.yaml` version müssen **IMMER** übereinstimmen.
 - Lokaler Test: `OPTIONS_PATH=./test_options.json SOMFY_CODES_PATH=./test_codes.json python -m somfy_rts.main`
 - culfw antwortet auf `V\n` mit Versions-String
 - Rolling Code Datei NIE manuell löschen → Neu-Pairing nötig
+- **Branch-Regel:** Immer direkt auf `main` arbeiten. Kein Worktree, kein `claude/*`-Branch. Alle Commits gehen direkt auf `main`.
