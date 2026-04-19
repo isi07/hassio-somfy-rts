@@ -4,11 +4,11 @@ Alle nennenswerten Änderungen werden hier dokumentiert.
 Format: [Conventional Commits](https://www.conventionalcommits.org/de/)
 
 
-## [0.3.15] - 2026-04-19
+## [0.3.16] - 2026-04-19
 
-### Neu hinzugefügt
+### Fehlerbehebungen
 
-- Temporäres Debug-Feature für PROG Repeat-Anzahl testen
-- Debug-Modus als Settings-Option, raw-cmd Endpunkt, README aktualisiert
+- PROG_LONG Yr14, PROG_PAIR Yr4, Auto-Reconnect bei I/O Error
+- Debug-Panel nur via Settings steuerbar, Repeat-Default auf 1
 
 
