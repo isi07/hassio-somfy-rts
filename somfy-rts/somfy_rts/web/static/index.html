@@ -38,10 +38,6 @@
   <div id="toolbar" class="toolbar hidden">
     <a href="./wizard" class="btn btn-primary">+ Anlernen</a>
     <button id="btn-import-open" class="btn btn-secondary">↑ Importieren</button>
-    <label id="debug-mode-label" style="display:none;align-items:center;gap:.4rem;font-size:.8rem;color:var(--text-dim);cursor:pointer;margin-left:auto">
-      <input type="checkbox" id="debug-mode-toggle" style="cursor:pointer">
-      🔧 Debug-Modus
-    </label>
   </div>
 
   <div id="loading" class="empty-state">
@@ -234,7 +230,7 @@ function renderDevice(d) {
           <option value="PROG" selected>PROG</option>
         </select>
         <label style="color:var(--text-dim)">Yr</label>
-        <input type="number" class="debug-repeat-input" value="4" min="1" max="255"
+        <input type="number" class="debug-repeat-input" value="1" min="1" max="255"
                style="width:4.5rem;padding:.2rem .4rem;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:.8rem">
         <button class="btn debug-send-btn" style="font-size:.75rem;padding:.25rem .7rem;background:#7a3a00;color:#ffd;border:1px solid #a05000">Senden</button>
         <span class="debug-result" style="color:var(--text-dim)"></span>
@@ -380,24 +376,11 @@ async function updateRollingCodes() {
   } catch {}
 }
 
-function applyDebugMode(enabled) {
-  document.querySelectorAll(".debug-panel").forEach(p => {
-    p.style.display = enabled ? "block" : "none";
-  });
-  const lbl = document.getElementById("debug-mode-label");
-  if (enabled) { lbl.style.display = "inline-flex"; }
-}
-
-document.getElementById("debug-mode-toggle").addEventListener("change", function() {
-  applyDebugMode(this.checked);
-});
-
 async function initDebugMode() {
   try {
     const cfg = await apiFetch("/api/config/debug");
     if (cfg.debug_mode) {
-      document.getElementById("debug-mode-toggle").checked = true;
-      applyDebugMode(true);
+      document.querySelectorAll(".debug-panel").forEach(p => { p.style.display = "block"; });
     }
   } catch {}
 }
