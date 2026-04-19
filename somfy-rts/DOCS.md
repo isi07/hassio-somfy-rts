@@ -145,6 +145,11 @@ Pairing übernommen werden:
 **Wichtig:** Der Rolling Code muss ≥ dem letzten von ioBroker verwendeten Wert sein.
 Ein zu niedriger Rolling Code bewirkt, dass der Motor alle Befehle ignoriert.
 
+**Adress-Format:** Die Adresse wird so wie aus ioBroker, ESPSomfy oder einer anderen
+Quelle übernommen (6 Hex-Zeichen, z.&nbsp;B. `A1B2C3`) direkt in den culfw-Befehl
+eingebaut. Alle gängigen Implementierungen (FHEM/culfw, ESPSomfy, RFLink) verwenden
+dieselbe Darstellung — eine direkte Migration ist daher ohne Konvertierung möglich.
+
 ---
 
 ## Template Cover in Home Assistant
