@@ -633,7 +633,7 @@ class TestImportDevice:
 
 
 class TestProgEndpoints:
-    """Tests for the PROG Long (Yr8) and PROG Pair (Yr4) device endpoints."""
+    """Tests for the PROG Long (Yr14) and PROG Pair (Yr4) device endpoints."""
 
     async def _insert_device(self, addr: str = "A00010") -> None:
         import somfy_rts.rolling_code as rc
@@ -643,15 +643,15 @@ class TestProgEndpoints:
         })
         rc._save_atomic(store)
 
-    async def test_prog_long_sends_yr8(self, client, ctx, tmp_codes_path):
-        """prog-long endpoint sends Yr8 as the first gateway command."""
+    async def test_prog_long_sends_yr14(self, client, ctx, tmp_codes_path):
+        """prog-long endpoint sends Yr14 as the first gateway command."""
         await self._insert_device()
         resp = await client.post("/api/devices/A00010/prog-long")
         assert resp.status == 200
         data = await resp.json()
         assert data["status"] == "sent"
-        assert data["repeat"] == 8
-        assert ctx.gateway.sent_commands[0] == "Yr8"
+        assert data["repeat"] == 14
+        assert ctx.gateway.sent_commands[0] == "Yr14"
         assert ctx.gateway.sent_commands[1].startswith("YsA0")
         # PROG CMD byte must be 0x80
         assert ctx.gateway.sent_commands[1][4:6] == "80"
@@ -681,7 +681,7 @@ class TestProgEndpoints:
 
 
 async def test_wizard_send_prog_long(client, ctx, tmp_codes_path):
-    """Wizard send_prog_long keeps state at ADDR_READY and sends Yr8."""
+    """Wizard send_prog_long keeps state at ADDR_READY and sends Yr14."""
     # Start wizard first
     await client.post(
         "/api/wizard/start",
@@ -693,8 +693,8 @@ async def test_wizard_send_prog_long(client, ctx, tmp_codes_path):
     data = await resp.json()
     # State remains ADDR_READY — not PROG_SENT
     assert data["state"] == "ADDR_READY"
-    assert data["repeat"] == 8
-    assert ctx.gateway.sent_commands[0] == "Yr8"
+    assert data["repeat"] == 14
+    assert ctx.gateway.sent_commands[0] == "Yr14"
 
 
 async def test_wizard_send_prog_long_no_session(client):
@@ -713,7 +713,7 @@ async def test_wizard_full_flow_with_prog_long(client, ctx, tmp_codes_path):
     )
     assert r1.status == 200
 
-    # Send PROG Lang (Yr8) — motor enters pairing mode
+    # Send PROG Lang (Yr14) — motor enters pairing mode
     r2 = await client.post("/api/wizard/send_prog_long")
     assert r2.status == 200
     assert (await r2.json())["state"] == "ADDR_READY"

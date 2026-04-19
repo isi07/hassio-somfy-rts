@@ -184,14 +184,14 @@ class TestResolveRtsAction:
 
 
 class TestProgLongAndProgPairCommands:
-    """Tests for PROG_LONG (Yr8) and PROG_PAIR (Yr4) in _handle_command()."""
+    """Tests for PROG_LONG (Yr14) and PROG_PAIR (Yr4) in _handle_command()."""
 
-    def test_prog_long_mode_a_sends_yr8(self, tmp_codes_path):
-        """Mode A: PROG_LONG → PROG with Yr8 as first gateway command."""
+    def test_prog_long_mode_a_sends_yr14(self, tmp_codes_path):
+        """Mode A: PROG_LONG → PROG with Yr14 as first gateway command."""
         dev, gw, _ = _make_device("shutter", mode="A")
         dev._handle_command("PROG_LONG")
         sent = [c.args[0] for c in gw.send_raw.call_args_list]
-        assert sent[0] == "Yr8", f"Expected Yr8, got {sent[0]!r}"
+        assert sent[0] == "Yr14", f"Expected Yr14, got {sent[0]!r}"
         assert sent[1][4:6] == "80", "PROG byte must be 0x80"
 
     def test_prog_pair_mode_a_sends_yr4(self, tmp_codes_path):
@@ -202,12 +202,12 @@ class TestProgLongAndProgPairCommands:
         assert sent[0] == "Yr4", f"Expected Yr4, got {sent[0]!r}"
         assert sent[1][4:6] == "80", "PROG byte must be 0x80"
 
-    def test_prog_long_mode_b_sends_yr8(self, tmp_codes_path):
-        """Mode B: PROG_LONG also sends Yr8 — works for both modes."""
+    def test_prog_long_mode_b_sends_yr14(self, tmp_codes_path):
+        """Mode B: PROG_LONG also sends Yr14 — works for both modes."""
         dev, gw, _ = _make_device("awning", mode="B")
         dev._handle_command("PROG_LONG")
         sent = [c.args[0] for c in gw.send_raw.call_args_list]
-        assert sent[0] == "Yr8"
+        assert sent[0] == "Yr14"
         assert sent[1][4:6] == "80"
 
     def test_prog_pair_mode_b_sends_yr4(self, tmp_codes_path):
@@ -249,8 +249,8 @@ class TestProgLongAndProgPairCommands:
         dev, gw, _ = _make_device("awning", mode="A")
         dev._handle_command("PROG_LONG")
         sent = [c.args[0] for c in gw.send_raw.call_args_list]
-        # Must be Yr8 + PROG telegram (0x80), not affected by awning's OPEN↔DOWN inversion
-        assert sent[0] == "Yr8"
+        # Must be Yr14 + PROG telegram (0x80), not affected by awning's OPEN↔DOWN inversion
+        assert sent[0] == "Yr14"
         assert sent[1][4:6] == "80"
 
     def test_prog_long_lowercase_accepted(self, tmp_codes_path):
@@ -258,4 +258,4 @@ class TestProgLongAndProgPairCommands:
         dev, gw, _ = _make_device("shutter", mode="A")
         dev._handle_command("prog_long")
         sent = [c.args[0] for c in gw.send_raw.call_args_list]
-        assert sent[0] == "Yr8"
+        assert sent[0] == "Yr14"

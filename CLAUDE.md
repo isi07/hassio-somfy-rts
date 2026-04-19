@@ -55,15 +55,19 @@ gateway.send_raw(telegram)
 - Centralis uno RTS ignoriert Telegramme ohne vorherigen `Yr`-Befehl — **kommentarlos, kein Fehler**
 - `build_rts_sequence()` gibt **immer** `[f"Yr{repeat}", telegram]` zurück — nie nur `[telegram]`
 - `log_rts_frame()` wird **nach** dem `send_raw()`-Loop aufgerufen — `STATUS=OK` bedeutet echt gesendet
-- **repeat-Werte:** `1` = Normalbefehle (Centralis uno: PFLICHT!), `4` = PROG Anlern, `8` = PROG Lang
+- **repeat-Werte:**
+  - `1`  = Normalbefehle (Centralis uno: PFLICHT!)
+  - `4`  = PROG Anlern (Motor bereits im Anlernmodus, kurzer Druck reicht)
+  - `14` = PROG Lang (~420 ms, Motor in Anlernmodus versetzen) — **empirisch verifiziert**: Yr13=nein, Yr14=ja
+  - ⚠️ **Yr16+ kann NanoCUL USB-Verbindung crashen — niemals überschreiten!**
 
 ```python
 # ❌ FALSCH — Yr{n} fehlt
 gateway.send_raw(telegram)        # Motor ignoriert das Telegramm stillschweigend!
 
 # ✅ RICHTIG — beide Kommandos aus RTSSequence.commands, log NACH dem Senden
-seq = build_rts_sequence(address, action, name)          # repeat=1 (Standard)
-seq = build_rts_sequence(address, "PROG", name, repeat=8)  # PROG Lang
+seq = build_rts_sequence(address, action, name)           # repeat=1 (Standard)
+seq = build_rts_sequence(address, "PROG", name, repeat=14)  # PROG Lang
 for cmd in seq.commands:          # [f"Yr{repeat}", "YsA0..."]
     gateway.send_raw(cmd)
 log_rts_frame(seq, address, action, success=True)   # erst hier: STATUS=OK ist echt
@@ -133,8 +137,8 @@ Beispiel (UP, RC=1, Addr=A1B2C3, repeat=1):
   Yr1
   YsA020001AA1B2C3
 
-Beispiel PROG Lang (repeat=8):
-  Yr8
+Beispiel PROG Lang (repeat=14):
+  Yr14
   YsA080001AA1B2C3
 ```
 
@@ -150,8 +154,8 @@ Beispiel PROG Lang (repeat=8):
 | MY_DOWN| 0x5         | 0x50             | My + Ab |
 
 **WICHTIG:** `repeat=1` (`Yr1`) ist **PFLICHT** für Centralis uno RTS bei Normalbefehlen — der Motor
-ignoriert Telegramme mit repeat>1. Ausnahme: PROG-Telegramme mit repeat=4 oder repeat=8
-werden unterstützt und von culfw korrekt verarbeitet.
+ignoriert Telegramme mit repeat>1. Ausnahme: PROG-Telegramme mit repeat=4 oder repeat=14
+werden unterstützt und von culfw korrekt verarbeitet. **Yr16+ crasht den NanoCUL — nicht überschreiten!**
 
 ---
 
@@ -259,7 +263,7 @@ BaseGateway (ABC)          # gateway.py
 
 | Button | unique_id Suffix | Topic | Payload |
 |--------|-----------------|-------|---------|
-| PROG Lang | `_prog_long` | `somfy/<slug>/cmd` | `PROG_LONG` → PROG Yr8 |
+| PROG Lang | `_prog_long` | `somfy/<slug>/cmd` | `PROG_LONG` → PROG Yr14 |
 | PROG Anlern | `_prog_pair` | `somfy/<slug>/cmd` | `PROG_PAIR` → PROG Yr4 |
 
 Beide Buttons erscheinen in HA unter **Konfiguration** des jeweiligen Geräts.
@@ -414,7 +418,7 @@ Der `PairingWizard` steuert den 5-stufigen Anlern-Flow:
 1. `wizard.start(name, device_type, mode="A")` — Adresse generieren, RC auf 0 setzen, in `somfy_codes.json` voranlegen (inkl. `mode`-Feld)
 2. Motor in Programmiermodus versetzen — entweder:
    - **Klassisch:** Orig.-FB PROG 3s halten → kurzes Auf-Ab
-   - **Alternativ:** `wizard.send_prog_long()` (Yr8) senden — ersetzt die Original-FB
+   - **Alternativ:** `wizard.send_prog_long()` (Yr14) senden — ersetzt die Original-FB
 3. `wizard.send_prog_pair()` (oder Alias `wizard.send_prog()`) — PROG Yr4 senden → virtuellen Sender anlernen
 4. Operator sieht Motor-Bestätigungsbewegung → `wizard.confirm()` aufrufen
 5. `wizard.get_device_config()` — Config-Dict zurückgeben (enthält `mode`)
@@ -423,7 +427,7 @@ Der `PairingWizard` steuert den 5-stufigen Anlern-Flow:
 
 | Methode | repeat | Aktion | Zustand danach |
 |---------|--------|--------|----------------|
-| `send_prog_long()` | Yr8 | Motor in Anlernmodus versetzen (ersetzt Orig.-FB PROG) | ADDR_READY |
+| `send_prog_long()` | Yr14 | Motor in Anlernmodus versetzen (ersetzt Orig.-FB PROG) | ADDR_READY |
 | `send_prog_pair()` | Yr4 | Virtuellen Sender am Motor registrieren/deregistrieren | PROG_SENT |
 | `send_prog()` | Yr4 | Alias für `send_prog_pair()` | PROG_SENT |
 
@@ -475,9 +479,9 @@ Das Frame-Log enthält `REPEAT={n}` (text) bzw. `"repeat": n` (JSON).
 
 | Endpunkt | repeat | Aktion |
 |----------|--------|--------|
-| `POST /api/devices/{id}/prog-long` | Yr8 | Motor in Anlernmodus versetzen |
+| `POST /api/devices/{id}/prog-long` | Yr14 | Motor in Anlernmodus versetzen |
 | `POST /api/devices/{id}/prog-pair` | Yr4 | Virtuellen Sender registrieren/deregistrieren |
-| `POST /api/wizard/send_prog_long` | Yr8 | Wizard: Motor in Anlernmodus (Zustand bleibt ADDR_READY) |
+| `POST /api/wizard/send_prog_long` | Yr14 | Wizard: Motor in Anlernmodus (Zustand bleibt ADDR_READY) |
 | `POST /api/wizard/send_prog` | Yr4 | Wizard: Virtuellen Sender anlernen (→ PROG_SENT) |
 
 ### MQTT Discovery Cleanup beim Löschen

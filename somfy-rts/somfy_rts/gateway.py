@@ -92,13 +92,31 @@ class CULGateway(BaseGateway):
                 rts_logger.log_disconnect(self._port)
 
     def send_raw(self, command: str) -> None:
-        """Sendet einen culfw-Befehl (fügt Newline an)."""
+        """Sendet einen culfw-Befehl (fügt Newline an).
+
+        Bei I/O-Fehler wird einmalig ein Reconnect versucht. Die Original-Exception
+        wird danach trotzdem weitergeworfen — STATUS=ERR bleibt im Frame-Log erhalten.
+        """
         if not self._serial or not self._serial.is_open:
             raise GatewayError("CUL nicht verbunden.")
         raw = (command + "\n").encode("ascii")
         logger.info("CUL TX: %s", command)
-        self._serial.write(raw)
-        self._serial.flush()
+        try:
+            self._serial.write(raw)
+            self._serial.flush()
+        except (OSError, serial.SerialException) as exc:
+            logger.warning("CUL: I/O Fehler — versuche Reconnect... (%s)", exc)
+            try:
+                self._serial.close()
+            except Exception:
+                pass
+            time.sleep(2)
+            try:
+                self.connect()
+                logger.info("CUL: Reconnect erfolgreich.")
+            except GatewayError as reconnect_exc:
+                logger.error("CUL: Reconnect fehlgeschlagen: %s", reconnect_exc)
+            raise GatewayError(f"I/O Fehler beim Senden: {exc}") from exc
 
     @property
     def is_connected(self) -> bool:

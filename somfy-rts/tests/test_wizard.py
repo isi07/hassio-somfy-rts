@@ -136,7 +136,7 @@ class TestDeviceConfig:
 
 
 class TestProgLongAndProgPair:
-    """Tests for send_prog_long() (Yr8) and send_prog_pair() (Yr4)."""
+    """Tests for send_prog_long() (Yr14) and send_prog_pair() (Yr4)."""
 
     def test_send_prog_pair_transitions_to_prog_sent(self, tmp_codes_path, mock_gateway):
         from somfy_rts.wizard import PairingWizard, WizardState
@@ -161,14 +161,14 @@ class TestProgLongAndProgPair:
         wizard.send_prog_long()
         assert wizard.state == WizardState.ADDR_READY
 
-    def test_send_prog_long_sends_yr8(self, tmp_codes_path, mock_gateway):
+    def test_send_prog_long_sends_yr14(self, tmp_codes_path, mock_gateway):
         from somfy_rts.wizard import PairingWizard
         wizard = PairingWizard(mock_gateway)
         wizard.start("Testgerät", "shutter")
         wizard.send_prog_long()
-        # First send_raw call must be "Yr8"
+        # First send_raw call must be "Yr14" (empirisch: Yr13=nein, Yr14=ja, Yr16+=crash)
         first_call = mock_gateway.send_raw.call_args_list[0][0][0]
-        assert first_call == "Yr8"
+        assert first_call == "Yr14"
 
     def test_send_prog_long_then_pair_completes_pairing(self, tmp_codes_path, mock_gateway):
         """Full flow: send_prog_long + send_prog_pair + confirm works end-to-end."""

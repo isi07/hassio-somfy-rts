@@ -8,14 +8,14 @@ Discovery-Struktur:
     Modus A: cover entity (optimistisch, device_class je Gerätetyp)
              + 3x sensor (entity_category: diagnostic):
                rolling_code, last_command (+ raw_frame Attribut), device_address
-             + 2x button (entity_category: config): PROG Lang (Yr8), PROG Anlern (Yr4)
+             + 2x button (entity_category: config): PROG Lang (Yr14), PROG Anlern (Yr4)
     Modus B: 3x button (entity_category: config): Auf, Zu, Stop
-             + 2x button (entity_category: config): PROG Lang (Yr8), PROG Anlern (Yr4)
+             + 2x button (entity_category: config): PROG Lang (Yr14), PROG Anlern (Yr4)
              + 2x sensor (entity_category: diagnostic):
                rolling_code, last_command (+ raw_frame Attribut)
 
   PROG-Buttons (beide Modi): command_topic somfy/{slug}/cmd,
-    payload_press PROG_LONG (Yr8) / PROG_PAIR (Yr4)
+    payload_press PROG_LONG (Yr14) / PROG_PAIR (Yr4)
 
 Availability: LWT auf Topic 'cul2mqtt/status' (online/offline, retain=True).
 Alle Discovery-Payloads enthalten availability mit payload_available='online'
@@ -330,7 +330,7 @@ class MQTTClient:
         command_handler: Callable[[str], None],
         sub_dev: dict,
     ) -> None:
-        """Registriert PROG Lang (Yr8) und PROG Anlern (Yr4) als HA-Button-Entitäten.
+        """Registriert PROG Lang (Yr14) und PROG Anlern (Yr4) als HA-Button-Entitäten.
 
         Gilt für ALLE Gerätetypen und BEIDE Modi (A + B).
         Beide Buttons teilen das Topic somfy/{slug}/cmd; Payload differenziert die Aktion.

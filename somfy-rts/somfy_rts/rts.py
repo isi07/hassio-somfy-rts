@@ -1,7 +1,7 @@
 """RTS-Protokoll: baut culfw-Befehlssequenz für Somfy RTS Telegramme.
 
 culfw Befehlsformat (433,42 MHz):
-  1. Yr{n}                        → Wiederholungen setzen (Standard: 1, PROG-Anlern: 4, PROG-Lang: 8)
+  1. Yr{n}                        → Wiederholungen setzen (Standard: 1, PROG-Anlern: 4, PROG-Lang: 14)
   2. YsA0<CMD><RC><ADDR>          → RTS Telegramm senden
 
   Felder:
@@ -23,8 +23,9 @@ culfw Befehlsformat (433,42 MHz):
 
 WICHTIG: repeat=1 (Yr1) ist PFLICHT für Centralis uno RTS bei normalen Befehlen —
          der Motor ignoriert Telegramme mit repeat>1.
-         Ausnahme: PROG-Befehle können repeat=4 (Anlern) oder repeat=8 (Lang/Anlernmodus)
+         Ausnahme: PROG-Befehle können repeat=4 (Anlern) oder repeat=14 (Lang/Anlernmodus)
          verwenden — diese Werte werden von culfw korrekt verarbeitet.
+WARNUNG: Yr16+ kann die NanoCUL USB-Verbindung zum Absturz bringen — nicht überschreiten!
 
 WICHTIG: Rolling Code wird ATOMAR persistiert BEVOR build_rts_sequence()
          zurückkehrt. Erst dann sendet der Aufrufer die Befehle.
@@ -42,7 +43,7 @@ logger = logging.getLogger(__name__)
 class RTSSequence:
     """Result of build_rts_sequence() — culfw commands plus metadata for frame logging.
 
-    commands[0] is f"Yr{repeat}" (e.g. "Yr1", "Yr4", "Yr8").
+    commands[0] is f"Yr{repeat}" (e.g. "Yr1", "Yr4", "Yr14").
     commands[1] is the RTS telegram string ("YsA0...").
     """
 
@@ -118,7 +119,8 @@ def build_rts_sequence(
                      resolve_rts_action() übersetzt werden)
         device_name: Optionaler Gerätename für somfy_codes.json
         repeat:      culfw Wiederholungsanzahl für Yr{repeat}-Kommando (Standard: 1).
-                     Normalbefehle: 1. PROG Anlern (Yr4): 4. PROG Lang (Yr8): 8.
+                     Normalbefehle: 1. PROG Anlern (Yr4): 4. PROG Lang (Yr14): 14.
+                     WARNUNG: Yr16+ crasht NanoCUL — nicht überschreiten!
 
     Returns:
         RTSSequence mit commands [f"Yr{repeat}", "YsA0..."] und RC-Metadaten.
