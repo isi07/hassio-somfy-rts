@@ -729,11 +729,53 @@ async def test_wizard_full_flow_with_prog_long(client, ctx, tmp_codes_path):
     assert (await r4.json())["state"] == "CONFIRMED"
 
 
-# ---------- DEBUG: POST /api/devices/{id}/prog-test ----------
+# ---------- GET /api/config/debug ----------
 
 
-class TestProgTestDebug:
-    """Tests for the DEBUG endpoint POST /api/devices/{id}/prog-test."""
+async def test_get_debug_config_default_false(client):
+    """Default config returns debug_mode=false."""
+    resp = await client.get("/api/config/debug")
+    assert resp.status == 200
+    data = await resp.json()
+    assert data["debug_mode"] is False
+
+
+async def test_get_debug_config_true(aiohttp_client, tmp_codes_path):
+    """Config with debug_mode=True returns debug_mode=true."""
+    from somfy_rts.config import Config
+    from somfy_rts.gateway import SimGateway
+    from somfy_rts.web.server import create_app
+
+    gw = SimGateway()
+    gw.connect()
+    ctx = AppContext(gateway=gw, config=Config(debug_mode=True))
+    app = create_app(ctx)
+    test_client = await aiohttp_client(app)
+
+    resp = await test_client.get("/api/config/debug")
+    assert resp.status == 200
+    data = await resp.json()
+    assert data["debug_mode"] is True
+
+
+# ---------- POST /api/devices/{id}/raw-cmd ----------
+
+
+class TestRawCmd:
+    """Tests for POST /api/devices/{id}/raw-cmd (requires debug_mode=True)."""
+
+    @pytest.fixture
+    async def debug_client(self, aiohttp_client, tmp_codes_path):
+        """aiohttp test client with debug_mode=True."""
+        from somfy_rts.config import Config
+        from somfy_rts.gateway import SimGateway
+        from somfy_rts.web.server import create_app
+
+        gw = SimGateway()
+        gw.connect()
+        self._ctx = AppContext(gateway=gw, config=Config(debug_mode=True))
+        app = create_app(self._ctx)
+        return await aiohttp_client(app)
 
     async def _insert_device(self, addr: str = "A00020") -> None:
         import somfy_rts.rolling_code as rc
@@ -743,91 +785,125 @@ class TestProgTestDebug:
         })
         rc._save_atomic(store)
 
-    async def test_prog_test_custom_repeat(self, client, ctx, tmp_codes_path):
-        """prog-test with repeat=17 sends Yr17 as first gateway command."""
+    async def test_raw_cmd_prog_custom_repeat(self, debug_client, tmp_codes_path):
+        """raw-cmd PROG with repeat=17 sends Yr17 as first gateway command."""
         await self._insert_device()
-        resp = await client.post(
-            "/api/devices/A00020/prog-test",
-            data=json.dumps({"repeat": 17}),
+        resp = await debug_client.post(
+            "/api/devices/A00020/raw-cmd",
+            data=json.dumps({"command": "PROG", "repeat": 17}),
             headers={"Content-Type": "application/json"},
         )
         assert resp.status == 200
         data = await resp.json()
         assert data["status"] == "sent"
+        assert data["command"] == "PROG"
         assert data["repeat"] == 17
-        assert ctx.gateway.sent_commands[0] == "Yr17"
-        assert ctx.gateway.sent_commands[1].startswith("YsA0")
-        assert ctx.gateway.sent_commands[1][4:6] == "80"
+        assert self._ctx.gateway.sent_commands[0] == "Yr17"
+        assert self._ctx.gateway.sent_commands[1].startswith("YsA0")
+        assert self._ctx.gateway.sent_commands[1][4:6] == "80"
 
-    async def test_prog_test_repeat_1(self, client, ctx, tmp_codes_path):
+    async def test_raw_cmd_up(self, debug_client, tmp_codes_path):
+        """raw-cmd UP sends Yr with correct UP telegram (0x20)."""
+        await self._insert_device()
+        resp = await debug_client.post(
+            "/api/devices/A00020/raw-cmd",
+            data=json.dumps({"command": "UP", "repeat": 1}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 200
+        assert self._ctx.gateway.sent_commands[0] == "Yr1"
+        assert self._ctx.gateway.sent_commands[1][4:6] == "20"
+
+    async def test_raw_cmd_repeat_1(self, debug_client, tmp_codes_path):
         """Minimum repeat value 1 is accepted."""
         await self._insert_device()
-        resp = await client.post(
-            "/api/devices/A00020/prog-test",
-            data=json.dumps({"repeat": 1}),
+        resp = await debug_client.post(
+            "/api/devices/A00020/raw-cmd",
+            data=json.dumps({"command": "PROG", "repeat": 1}),
             headers={"Content-Type": "application/json"},
         )
         assert resp.status == 200
-        assert ctx.gateway.sent_commands[0] == "Yr1"
+        assert self._ctx.gateway.sent_commands[0] == "Yr1"
 
-    async def test_prog_test_repeat_255(self, client, ctx, tmp_codes_path):
+    async def test_raw_cmd_repeat_255(self, debug_client, tmp_codes_path):
         """Maximum repeat value 255 is accepted."""
         await self._insert_device()
-        resp = await client.post(
-            "/api/devices/A00020/prog-test",
-            data=json.dumps({"repeat": 255}),
+        resp = await debug_client.post(
+            "/api/devices/A00020/raw-cmd",
+            data=json.dumps({"command": "PROG", "repeat": 255}),
             headers={"Content-Type": "application/json"},
         )
         assert resp.status == 200
-        assert ctx.gateway.sent_commands[0] == "Yr255"
+        assert self._ctx.gateway.sent_commands[0] == "Yr255"
 
-    async def test_prog_test_repeat_0_rejected(self, client, tmp_codes_path):
+    async def test_raw_cmd_repeat_0_rejected(self, debug_client, tmp_codes_path):
         """repeat=0 is below minimum — must return 400."""
         await self._insert_device()
-        resp = await client.post(
-            "/api/devices/A00020/prog-test",
-            data=json.dumps({"repeat": 0}),
+        resp = await debug_client.post(
+            "/api/devices/A00020/raw-cmd",
+            data=json.dumps({"command": "PROG", "repeat": 0}),
             headers={"Content-Type": "application/json"},
         )
         assert resp.status == 400
 
-    async def test_prog_test_repeat_256_rejected(self, client, tmp_codes_path):
+    async def test_raw_cmd_repeat_256_rejected(self, debug_client, tmp_codes_path):
         """repeat=256 exceeds uint8 range — must return 400."""
         await self._insert_device()
-        resp = await client.post(
-            "/api/devices/A00020/prog-test",
-            data=json.dumps({"repeat": 256}),
+        resp = await debug_client.post(
+            "/api/devices/A00020/raw-cmd",
+            data=json.dumps({"command": "PROG", "repeat": 256}),
             headers={"Content-Type": "application/json"},
         )
         assert resp.status == 400
 
-    async def test_prog_test_missing_repeat_rejected(self, client, tmp_codes_path):
+    async def test_raw_cmd_missing_repeat_rejected(self, debug_client, tmp_codes_path):
         """Missing repeat field must return 400."""
         await self._insert_device()
-        resp = await client.post(
-            "/api/devices/A00020/prog-test",
-            data=json.dumps({}),
+        resp = await debug_client.post(
+            "/api/devices/A00020/raw-cmd",
+            data=json.dumps({"command": "PROG"}),
             headers={"Content-Type": "application/json"},
         )
         assert resp.status == 400
 
-    async def test_prog_test_device_not_found(self, client):
+    async def test_raw_cmd_invalid_command_rejected(self, debug_client, tmp_codes_path):
+        """Unknown command must return 400."""
+        await self._insert_device()
+        resp = await debug_client.post(
+            "/api/devices/A00020/raw-cmd",
+            data=json.dumps({"command": "EXPLODE", "repeat": 4}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 400
+
+    async def test_raw_cmd_device_not_found(self, debug_client):
         """Unknown address must return 404."""
-        resp = await client.post(
-            "/api/devices/FFFFFF/prog-test",
-            data=json.dumps({"repeat": 8}),
+        resp = await debug_client.post(
+            "/api/devices/FFFFFF/raw-cmd",
+            data=json.dumps({"command": "PROG", "repeat": 8}),
             headers={"Content-Type": "application/json"},
         )
         assert resp.status == 404
 
-    async def test_prog_test_response_contains_address(self, client, ctx, tmp_codes_path):
-        """Response body contains address and action fields."""
+    async def test_raw_cmd_forbidden_without_debug_mode(self, client, tmp_codes_path):
+        """raw-cmd returns 403 when debug_mode is False (default)."""
         await self._insert_device()
         resp = await client.post(
-            "/api/devices/A00020/prog-test",
-            data=json.dumps({"repeat": 4}),
+            "/api/devices/A00020/raw-cmd",
+            data=json.dumps({"command": "PROG", "repeat": 4}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 403
+
+    async def test_raw_cmd_response_fields(self, debug_client, tmp_codes_path):
+        """Response body contains command, address and repeat fields."""
+        await self._insert_device()
+        resp = await debug_client.post(
+            "/api/devices/A00020/raw-cmd",
+            data=json.dumps({"command": "PROG", "repeat": 4}),
             headers={"Content-Type": "application/json"},
         )
         data = await resp.json()
         assert data["address"] == "A00020"
-        assert data["action"] == "PROG_TEST"
+        assert data["command"] == "PROG"
+        assert data["repeat"] == 4

@@ -47,6 +47,7 @@ class Config:
     simulation_mode: bool = False  # Use SimGateway instead of CULGateway
     file_logging: bool = False     # Write RTS frames to /share/somfy_rts/rts_frames.log
     timezone: str = "Europe/Berlin"  # IANA timezone name for log timestamps
+    debug_mode: bool = False       # Show advanced controls in Web-UI (raw-cmd, repeat)
 
 
 def load_config() -> Config:
@@ -64,4 +65,5 @@ def load_config() -> Config:
         simulation_mode=os.environ.get("SOMFY_SIMULATION_MODE", "false").lower() == "true",
         file_logging=os.environ.get("SOMFY_FILE_LOGGING", "false").lower() == "true",
         timezone=os.environ.get("SOMFY_TIMEZONE", "Europe/Berlin"),
+        debug_mode=os.environ.get("SOMFY_DEBUG_MODE", "false").lower() == "true",
     )

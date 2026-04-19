@@ -2,13 +2,14 @@
 
 Endpoints:
   GET  /api/status                    → gateway + simulation status
+  GET  /api/config/debug              → {"debug_mode": bool} from app config
   GET  /api/devices                   → all devices from somfy_codes.json
   GET  /api/devices/{id}              → single device by address
   POST /api/devices/import            → add device by known address + rolling code (no pairing)
   POST /api/devices/{id}/cmd          → send RTS command (OPEN/CLOSE/STOP/MY_UP/MY_DOWN)
   POST /api/devices/{id}/prog-long    → send PROG Yr8 (put motor in pairing mode)
   POST /api/devices/{id}/prog-pair    → send PROG Yr4 (register/deregister remote)
-  POST /api/devices/{id}/prog-test    → DEBUG: send PROG with custom repeat (1–255)
+  POST /api/devices/{id}/raw-cmd      → send any Layer-2 command with custom repeat (debug_mode)
   DELETE /api/devices/{id}            → remove device
 
   GET  /api/wizard/status             → current wizard state
@@ -80,6 +81,16 @@ class _LogBufferHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         self._buf.append({"ts": record.created, "message": record.getMessage()})
+
+
+# ---------- Config ----------
+
+
+@routes.get("/api/config/debug")
+async def get_debug_config(request: web.Request) -> web.Response:
+    """Return whether debug mode is enabled in the app configuration."""
+    ctx: AppContext = request.app["ctx"]
+    return web.json_response({"debug_mode": ctx.config.debug_mode})
 
 
 # ---------- Status ----------
@@ -311,25 +322,71 @@ async def send_prog_pair(request: web.Request) -> web.Response:
     return await _send_prog_with_repeat(request, repeat=4, label="PROG_PAIR")
 
 
-# DEBUG START
-@routes.post("/api/devices/{id}/prog-test")  # DEBUG
-async def send_prog_test(request: web.Request) -> web.Response:  # DEBUG
-    """DEBUG: Send PROG with a custom Yr repeat value (1–255) for culfw timing tests."""  # DEBUG
-    try:  # DEBUG
-        data = await request.json()  # DEBUG
-    except Exception:  # DEBUG
-        raise web.HTTPBadRequest(reason="Ungültiges JSON.")  # DEBUG
-    repeat_raw = data.get("repeat", None)  # DEBUG
-    if repeat_raw is None:  # DEBUG
-        raise web.HTTPBadRequest(reason="repeat ist erforderlich.")  # DEBUG
-    try:  # DEBUG
-        repeat = int(repeat_raw)  # DEBUG
-    except (TypeError, ValueError):  # DEBUG
-        raise web.HTTPBadRequest(reason="repeat muss eine ganze Zahl sein.")  # DEBUG
-    if not 1 <= repeat <= 255:  # DEBUG
-        raise web.HTTPBadRequest(reason="repeat muss zwischen 1 und 255 liegen.")  # DEBUG
-    return await _send_prog_with_repeat(request, repeat=repeat, label="PROG_TEST")  # DEBUG
-# DEBUG END
+_RAW_CMD_VALID_ACTIONS = {"UP", "DOWN", "MY", "MY_UP", "MY_DOWN", "PROG"}
+
+
+@routes.post("/api/devices/{id}/raw-cmd")
+async def send_raw_cmd(request: web.Request) -> web.Response:
+    """Send any Layer-2 RTS command with a custom Yr repeat value.
+
+    Only available when debug_mode is enabled in the app configuration.
+    Body: {"command": "UP|DOWN|MY|MY_UP|MY_DOWN|PROG", "repeat": 1..255}
+    """
+    ctx: AppContext = request.app["ctx"]
+    if not ctx.config.debug_mode:
+        raise web.HTTPForbidden(reason="raw-cmd ist nur im Debug-Modus verfügbar.")
+
+    try:
+        data = await request.json()
+    except Exception:
+        raise web.HTTPBadRequest(reason="Ungültiges JSON.")
+
+    command = str(data.get("command", "")).upper()
+    if command not in _RAW_CMD_VALID_ACTIONS:
+        raise web.HTTPBadRequest(
+            reason=f"Unbekannter Befehl: {command!r}. Erlaubt: {sorted(_RAW_CMD_VALID_ACTIONS)}"
+        )
+
+    repeat_raw = data.get("repeat", None)
+    if repeat_raw is None:
+        raise web.HTTPBadRequest(reason="repeat ist erforderlich.")
+    try:
+        repeat = int(repeat_raw)
+    except (TypeError, ValueError):
+        raise web.HTTPBadRequest(reason="repeat muss eine ganze Zahl sein.")
+    if not 1 <= repeat <= 255:
+        raise web.HTTPBadRequest(reason="repeat muss zwischen 1 und 255 liegen.")
+
+    addr = request.match_info["id"].upper()
+    store = _load()
+    device = next(
+        (d for d in store.get("devices", []) if d.get("address", "").upper() == addr),
+        None,
+    )
+    if device is None:
+        raise web.HTTPNotFound(reason=f"Gerät {addr} nicht gefunden.")
+
+    if not ctx.gateway.is_connected:
+        raise web.HTTPServiceUnavailable(reason="Gateway nicht verbunden.")
+
+    try:
+        seq = build_rts_sequence(addr, command, device.get("name", ""), repeat=repeat)
+    except ValueError as exc:
+        raise web.HTTPBadRequest(reason=str(exc)) from exc
+
+    try:
+        for cmd in seq.commands:
+            ctx.gateway.send_raw(cmd)
+    except Exception as exc:
+        logger.error("Sendefehler %s → %s Yr%d: %s", addr, command, repeat, exc)
+        log_rts_frame(seq, addr, command, success=False, error=str(exc))
+        raise web.HTTPInternalServerError(reason=str(exc)) from exc
+
+    log_rts_frame(seq, addr, command, success=True)
+    logger.info("API raw-cmd: %s → %s Yr%d gesendet.", addr, command, repeat)
+    return web.json_response(
+        {"status": "sent", "command": command, "address": addr, "repeat": repeat}
+    )
 
 
 @routes.delete("/api/devices/{id}")
@@ -498,6 +555,7 @@ async def get_settings(request: web.Request) -> web.Response:
             "simulation_mode": c.simulation_mode,
             "file_logging": c.file_logging,
             "timezone": c.timezone,
+            "debug_mode": c.debug_mode,
         }
     )
 

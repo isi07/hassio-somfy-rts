@@ -24,6 +24,7 @@ LOG_FORMAT=$(_opt log_format "text")
 SIMULATION_MODE=$(_opt simulation_mode "false")
 FILE_LOGGING=$(_opt file_logging "false")
 TIMEZONE=$(_opt timezone "Europe/Berlin")
+DEBUG_MODE=$(_opt debug_mode "false")
 
 # ---------- Validate USB port ----------
 if [ ! -e "${USB_PORT}" ]; then
@@ -52,6 +53,7 @@ export SOMFY_SIMULATION_MODE="${SIMULATION_MODE}"
 export SOMFY_FILE_LOGGING="${FILE_LOGGING}"
 export SOMFY_CODES_PATH="/data/somfy_codes.json"
 export SOMFY_TIMEZONE="${TIMEZONE}"
+export SOMFY_DEBUG_MODE="${DEBUG_MODE}"
 
 # ---------- Set system timezone ----------
 export TZ="${TIMEZONE}"

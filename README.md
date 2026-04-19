@@ -2,7 +2,7 @@
 
 ![Release](https://img.shields.io/github/v/release/isi07/hassio-somfy-rts?style=for-the-badge&color=blue)
 ![License](https://img.shields.io/github/license/isi07/hassio-somfy-rts?style=for-the-badge)
-![Python](https://img.shields.io/badge/Python-3.11+-yellow?style=for-the-badge&logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12+-yellow?style=for-the-badge&logo=python&logoColor=white)
 ![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.11+-41BDF5?style=for-the-badge&logo=home-assistant&logoColor=white)
 ![Build](https://img.shields.io/github/actions/workflow/status/isi07/hassio-somfy-rts/build.yaml?style=for-the-badge)
 ![Arch](https://img.shields.io/badge/Arch-amd64%20%7C%20aarch64-informational?style=for-the-badge)
@@ -17,7 +17,7 @@ und **MQTT**.
 
 | App (ehemals Add-on) | Version | Beschreibung |
 |----------------------|---------|--------------|
-| [Somfy RTS](somfy-rts/DOCS.md) | 0.2.0 | Steuerung von Somfy RTS Geräten via NanoCUL/culfw |
+| [Somfy RTS](somfy-rts/DOCS.md) | 0.3.14 | Steuerung von Somfy RTS Geräten via NanoCUL/culfw |
 
 ---
 
@@ -101,13 +101,12 @@ Home Assistant
 
 ---
 
-## Blueprints
+## Template Cover
 
-Im Ordner `blueprints/template/` befinden sich vorgefertigte Template-Blueprints
-(HA 2024.11+):
-
-- **somfy_rts_awning.yaml** — Template Cover für Markisen (Fensterkontakt, Fahrzeit)
-- **somfy_rts_shutter.yaml** — Template Cover für Rollläden (Fensterkontakt, Fahrzeit)
+Vollständige YAML-Beispiele für Template Covers (Modus A und B) befinden sich in
+[DOCS.md](somfy-rts/DOCS.md). Template Covers verbinden Somfy-Entitäten mit einem
+physischen Kontaktsensor für einen zuverlässigen Zustand — auch nach manueller
+Bedienung oder MY-Taste.
 
 ---
 
