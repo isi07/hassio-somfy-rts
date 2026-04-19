@@ -38,6 +38,12 @@
   <div id="toolbar" class="toolbar hidden">
     <a href="./wizard" class="btn btn-primary">+ Anlernen</a>
     <button id="btn-import-open" class="btn btn-secondary">↑ Importieren</button>
+    <!-- DEBUG START -->
+    <label style="display:inline-flex;align-items:center;gap:.4rem;font-size:.8rem;color:var(--text-dim);cursor:pointer;margin-left:auto">
+      <input type="checkbox" id="debug-mode-toggle" style="cursor:pointer">
+      🔧 Debug-Modus
+    </label>
+    <!-- DEBUG END -->
   </div>
 
   <div id="loading" class="empty-state">
@@ -217,6 +223,18 @@ function renderDevice(d) {
       <button class="btn btn-prog-long"  data-prog="prog-long"  title="PROG Yr8 — versetzt den Motor in den Anlernmodus (ersetzt PROG-Taste der Original-FB)">⏱ PROG Lang</button>
       <button class="btn btn-prog-pair"  data-prog="prog-pair"  title="PROG Yr4 — lernt den virtuellen Sender am Motor an (oder ab)">📡 PROG Anlern</button>
     </div>
+    <!-- DEBUG START -->
+    <div class="debug-panel" style="display:none;margin-top:.6rem;padding:.6rem;background:var(--surface2);border:1px dashed #555;border-radius:var(--radius);font-size:.78rem">
+      <div style="color:#f0a500;font-weight:600;margin-bottom:.4rem">🔧 Debug: Yr Repeat testen</div>
+      <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap">
+        <label style="color:var(--text-dim)">Yr Repeat</label>
+        <input type="number" class="debug-repeat-input" value="8" min="1" max="255"
+               style="width:5rem;padding:.2rem .4rem;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:.8rem">
+        <button class="btn debug-prog-test-btn" style="font-size:.75rem;padding:.25rem .7rem;background:#7a3a00;color:#ffd;border:1px solid #a05000">PROG Test</button>
+        <span class="debug-result" style="color:var(--text-dim)"></span>
+      </div>
+    </div>
+    <!-- DEBUG END -->
     <div class="device-rc">RC: <span class="mono rc-value">${d.rolling_code}</span></div>
   `;
   el.querySelectorAll("button[data-action]").forEach(btn => {
@@ -226,6 +244,26 @@ function renderDevice(d) {
     btn.addEventListener("click", () => sendProgCmd(d.address, btn.dataset.prog, btn));
   });
   el.querySelector(".btn-del").addEventListener("click", () => deleteDevice(d.address, d.name, el));
+  // DEBUG START
+  el.querySelector(".debug-prog-test-btn").addEventListener("click", async function() {
+    const input = el.querySelector(".debug-repeat-input");
+    const result = el.querySelector(".debug-result");
+    const repeat = parseInt(input.value, 10);
+    if (isNaN(repeat) || repeat < 1 || repeat > 255) {
+      result.textContent = "⚠ 1–255"; result.style.color = "#f87"; return;
+    }
+    this.disabled = true; result.textContent = "…"; result.style.color = "var(--text-dim)";
+    try {
+      await apiFetch("/api/devices/" + d.address + "/prog-test", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({repeat}),
+      });
+      result.textContent = `✓ Yr${repeat} gesendet`; result.style.color = "#6f6";
+    } catch(e) {
+      result.textContent = "✗ " + e.message; result.style.color = "#f87";
+    } finally { this.disabled = false; }
+  });
+  // DEBUG END
   return el;
 }
 
@@ -342,6 +380,14 @@ loadDevices();
 setInterval(updateStatus, 10000);
 setInterval(updateRollingCodes, 5000);
 setInterval(loadDevices, 60000);
+
+// DEBUG START
+document.getElementById("debug-mode-toggle").addEventListener("change", function() {
+  document.querySelectorAll(".debug-panel").forEach(p => {
+    p.style.display = this.checked ? "block" : "none";
+  });
+});
+// DEBUG END
 </script>
 </body>
 </html>

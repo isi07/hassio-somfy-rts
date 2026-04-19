@@ -8,6 +8,7 @@ Endpoints:
   POST /api/devices/{id}/cmd          → send RTS command (OPEN/CLOSE/STOP/MY_UP/MY_DOWN)
   POST /api/devices/{id}/prog-long    → send PROG Yr8 (put motor in pairing mode)
   POST /api/devices/{id}/prog-pair    → send PROG Yr4 (register/deregister remote)
+  POST /api/devices/{id}/prog-test    → DEBUG: send PROG with custom repeat (1–255)
   DELETE /api/devices/{id}            → remove device
 
   GET  /api/wizard/status             → current wizard state
@@ -308,6 +309,27 @@ async def send_prog_pair(request: web.Request) -> web.Response:
     The motor must already be in pairing mode (via prog-long or the original remote).
     """
     return await _send_prog_with_repeat(request, repeat=4, label="PROG_PAIR")
+
+
+# DEBUG START
+@routes.post("/api/devices/{id}/prog-test")  # DEBUG
+async def send_prog_test(request: web.Request) -> web.Response:  # DEBUG
+    """DEBUG: Send PROG with a custom Yr repeat value (1–255) for culfw timing tests."""  # DEBUG
+    try:  # DEBUG
+        data = await request.json()  # DEBUG
+    except Exception:  # DEBUG
+        raise web.HTTPBadRequest(reason="Ungültiges JSON.")  # DEBUG
+    repeat_raw = data.get("repeat", None)  # DEBUG
+    if repeat_raw is None:  # DEBUG
+        raise web.HTTPBadRequest(reason="repeat ist erforderlich.")  # DEBUG
+    try:  # DEBUG
+        repeat = int(repeat_raw)  # DEBUG
+    except (TypeError, ValueError):  # DEBUG
+        raise web.HTTPBadRequest(reason="repeat muss eine ganze Zahl sein.")  # DEBUG
+    if not 1 <= repeat <= 255:  # DEBUG
+        raise web.HTTPBadRequest(reason="repeat muss zwischen 1 und 255 liegen.")  # DEBUG
+    return await _send_prog_with_repeat(request, repeat=repeat, label="PROG_TEST")  # DEBUG
+# DEBUG END
 
 
 @routes.delete("/api/devices/{id}")

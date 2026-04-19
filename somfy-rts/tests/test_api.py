@@ -727,3 +727,107 @@ async def test_wizard_full_flow_with_prog_long(client, ctx, tmp_codes_path):
     r4 = await client.post("/api/wizard/confirm")
     assert r4.status == 200
     assert (await r4.json())["state"] == "CONFIRMED"
+
+
+# ---------- DEBUG: POST /api/devices/{id}/prog-test ----------
+
+
+class TestProgTestDebug:
+    """Tests for the DEBUG endpoint POST /api/devices/{id}/prog-test."""
+
+    async def _insert_device(self, addr: str = "A00020") -> None:
+        import somfy_rts.rolling_code as rc
+        store = rc._load()
+        store["devices"].append({
+            "address": addr, "name": "Debug Gerät", "rolling_code": 0, "device_type": "shutter",
+        })
+        rc._save_atomic(store)
+
+    async def test_prog_test_custom_repeat(self, client, ctx, tmp_codes_path):
+        """prog-test with repeat=17 sends Yr17 as first gateway command."""
+        await self._insert_device()
+        resp = await client.post(
+            "/api/devices/A00020/prog-test",
+            data=json.dumps({"repeat": 17}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "sent"
+        assert data["repeat"] == 17
+        assert ctx.gateway.sent_commands[0] == "Yr17"
+        assert ctx.gateway.sent_commands[1].startswith("YsA0")
+        assert ctx.gateway.sent_commands[1][4:6] == "80"
+
+    async def test_prog_test_repeat_1(self, client, ctx, tmp_codes_path):
+        """Minimum repeat value 1 is accepted."""
+        await self._insert_device()
+        resp = await client.post(
+            "/api/devices/A00020/prog-test",
+            data=json.dumps({"repeat": 1}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 200
+        assert ctx.gateway.sent_commands[0] == "Yr1"
+
+    async def test_prog_test_repeat_255(self, client, ctx, tmp_codes_path):
+        """Maximum repeat value 255 is accepted."""
+        await self._insert_device()
+        resp = await client.post(
+            "/api/devices/A00020/prog-test",
+            data=json.dumps({"repeat": 255}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 200
+        assert ctx.gateway.sent_commands[0] == "Yr255"
+
+    async def test_prog_test_repeat_0_rejected(self, client, tmp_codes_path):
+        """repeat=0 is below minimum — must return 400."""
+        await self._insert_device()
+        resp = await client.post(
+            "/api/devices/A00020/prog-test",
+            data=json.dumps({"repeat": 0}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 400
+
+    async def test_prog_test_repeat_256_rejected(self, client, tmp_codes_path):
+        """repeat=256 exceeds uint8 range — must return 400."""
+        await self._insert_device()
+        resp = await client.post(
+            "/api/devices/A00020/prog-test",
+            data=json.dumps({"repeat": 256}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 400
+
+    async def test_prog_test_missing_repeat_rejected(self, client, tmp_codes_path):
+        """Missing repeat field must return 400."""
+        await self._insert_device()
+        resp = await client.post(
+            "/api/devices/A00020/prog-test",
+            data=json.dumps({}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 400
+
+    async def test_prog_test_device_not_found(self, client):
+        """Unknown address must return 404."""
+        resp = await client.post(
+            "/api/devices/FFFFFF/prog-test",
+            data=json.dumps({"repeat": 8}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status == 404
+
+    async def test_prog_test_response_contains_address(self, client, ctx, tmp_codes_path):
+        """Response body contains address and action fields."""
+        await self._insert_device()
+        resp = await client.post(
+            "/api/devices/A00020/prog-test",
+            data=json.dumps({"repeat": 4}),
+            headers={"Content-Type": "application/json"},
+        )
+        data = await resp.json()
+        assert data["address"] == "A00020"
+        assert data["action"] == "PROG_TEST"
