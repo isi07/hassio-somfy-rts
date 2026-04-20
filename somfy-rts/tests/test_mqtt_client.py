@@ -71,9 +71,14 @@ class TestDiscoveryTopicsModeA:
         uid = device_a.unique_id_base
         assert f"{HA_DISCOVERY}/button/{uid}_prog_pair/config" in topics
 
+    def test_contains_my_button(self, device_a):
+        topics = discovery_topics(device_a)
+        uid = device_a.unique_id_base
+        assert f"{HA_DISCOVERY}/button/{uid}_my/config" in topics
+
     def test_total_count(self, device_a):
-        """Mode A has exactly 6 discovery topics."""
-        assert len(discovery_topics(device_a)) == 6
+        """Mode A awning (no has_tilt) has exactly 7 discovery topics."""
+        assert len(discovery_topics(device_a)) == 7
 
     def test_no_mode_b_buttons(self, device_a):
         """Mode A must not include auf/zu/stop button topics."""
@@ -123,21 +128,26 @@ class TestDiscoveryTopicsModeB:
         uid = device_b.unique_id_base
         assert f"{HA_DISCOVERY}/button/{uid}_prog_pair/config" in topics
 
+    def test_contains_my_button(self, device_b):
+        topics = discovery_topics(device_b)
+        uid = device_b.unique_id_base
+        assert f"{HA_DISCOVERY}/button/{uid}_my/config" in topics
+
+    def test_contains_device_address_sensor(self, device_b):
+        """Mode B includes the device_address sensor topic."""
+        topics = discovery_topics(device_b)
+        uid = device_b.unique_id_base
+        assert f"{HA_DISCOVERY}/sensor/{uid}_device_address/config" in topics
+
     def test_total_count(self, device_b):
-        """Mode B has exactly 7 discovery topics."""
-        assert len(discovery_topics(device_b)) == 7
+        """Mode B shutter (no has_tilt) has exactly 9 discovery topics."""
+        assert len(discovery_topics(device_b)) == 9
 
     def test_no_cover_topic(self, device_b):
         """Mode B must not include a cover topic."""
         topics = discovery_topics(device_b)
         uid = device_b.unique_id_base
         assert f"{HA_DISCOVERY}/cover/{uid}/config" not in topics
-
-    def test_no_device_address_sensor(self, device_b):
-        """Mode B must not include the device_address sensor topic."""
-        topics = discovery_topics(device_b)
-        uid = device_b.unique_id_base
-        assert f"{HA_DISCOVERY}/sensor/{uid}_device_address/config" not in topics
 
 
 # ---------- unregister_device() — Modus A ----------
@@ -172,7 +182,7 @@ class TestUnregisterDeviceModeA:
                     f"Topic {topic} not published with retain=True"
                 )
 
-    def test_exactly_six_discovery_topics_cleared(self, mqtt_client_with_mock, device_a):
+    def test_exactly_seven_discovery_topics_cleared(self, mqtt_client_with_mock, device_a):
         client, mock_paho = mqtt_client_with_mock
         client.unregister_device(device_a)
 
@@ -180,7 +190,7 @@ class TestUnregisterDeviceModeA:
             c for c in mock_paho.publish.call_args_list
             if c.args[0] in discovery_topics(device_a)
         ]
-        assert len(cleared) == 6
+        assert len(cleared) == 7
 
     def test_state_topics_also_cleared(self, mqtt_client_with_mock, device_a):
         client, mock_paho = mqtt_client_with_mock
@@ -221,7 +231,7 @@ class TestUnregisterDeviceModeB:
         expected = set(discovery_topics(device_b))
         assert expected.issubset(published_topics)
 
-    def test_exactly_seven_discovery_topics_cleared(self, mqtt_client_with_mock, device_b):
+    def test_exactly_nine_discovery_topics_cleared(self, mqtt_client_with_mock, device_b):
         client, mock_paho = mqtt_client_with_mock
         client.unregister_device(device_b)
 
@@ -229,7 +239,7 @@ class TestUnregisterDeviceModeB:
             c for c in mock_paho.publish.call_args_list
             if c.args[0] in discovery_topics(device_b)
         ]
-        assert len(cleared) == 7
+        assert len(cleared) == 9
 
     def test_no_cover_topic_published(self, mqtt_client_with_mock, device_b):
         client, mock_paho = mqtt_client_with_mock
@@ -269,12 +279,16 @@ class TestStateTopics:
         slug = device_a.slug
         assert f"{MQTT_TOPIC_PREFIX}/{slug}/last_command_attr" in state_topics(device_a)
 
+    def test_contains_device_address(self, device_a):
+        slug = device_a.slug
+        assert f"{MQTT_TOPIC_PREFIX}/{slug}/device_address" in state_topics(device_a)
+
     def test_total_count(self, device_a):
-        """Genau 4 State-Topics pro Gerät (unabhängig vom Modus)."""
-        assert len(state_topics(device_a)) == 4
+        """Genau 5 State-Topics pro Gerät (unabhängig vom Modus)."""
+        assert len(state_topics(device_a)) == 5
 
     def test_same_count_mode_b(self, device_b):
-        assert len(state_topics(device_b)) == 4
+        assert len(state_topics(device_b)) == 5
 
     def test_slug_derived_from_name(self, device_a):
         """Alle Topics enthalten den korrekt abgeleiteten Slug."""

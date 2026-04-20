@@ -5,14 +5,18 @@ Discovery-Struktur:
     - sensor: Verbindungsstatus, USB-Port, Geräteanzahl, SW-Version
 
   Sub-Device pro Gerät (via_device: Gateway):
-    Modus A: cover entity (optimistisch, device_class je Gerätetyp)
+    Modus A: cover/light/switch entity (optimistisch, ha_platform je Gerätetyp)
+             + 1x button (entity_category: config): MY (Lieblingsposition)
+             + 2x button (entity_category: config, nur blind): MY_UP, MY_DOWN
              + 3x sensor (entity_category: diagnostic):
                rolling_code, last_command (+ raw_frame Attribut), device_address
              + 2x button (entity_category: config): PROG Lang (Yr14), PROG Anlern (Yr4)
     Modus B: 3x button (entity_category: config): Auf, Zu, Stop
+             + 1x button (entity_category: config): MY (Lieblingsposition)
+             + 2x button (entity_category: config, nur blind): MY_UP, MY_DOWN
              + 2x button (entity_category: config): PROG Lang (Yr14), PROG Anlern (Yr4)
-             + 2x sensor (entity_category: diagnostic):
-               rolling_code, last_command (+ raw_frame Attribut)
+             + 3x sensor (entity_category: diagnostic):
+               rolling_code, last_command (+ raw_frame Attribut), device_address
 
   PROG-Buttons (beide Modi): command_topic somfy/{slug}/cmd,
     payload_press PROG_LONG (Yr14) / PROG_PAIR (Yr4)
@@ -281,15 +285,68 @@ class MQTTClient:
 
         self._subscribe(command_topic, command_handler)
 
+        # MY Button (Lieblingsposition) — alle Gerätetypen, entity_category: config
+        my_payload: Dict = {
+            "name": f"{device.name} MY",
+            "unique_id": f"{device.unique_id_base}_my",
+            "command_topic": command_topic,
+            "payload_press": "MY",
+            "entity_category": "config",
+            "icon": "mdi:heart",
+            "availability": avail,
+            "device": sub_dev,
+            "origin": ORIGIN,
+        }
+        self._client.publish(
+            f"{HA_DISCOVERY}/button/{device.unique_id_base}_my/config",
+            json.dumps(my_payload), retain=True,
+        )
+
+        # MY_UP / MY_DOWN Tilt-Buttons — nur für Jalousien (has_tilt: true)
+        if profile.get("has_tilt", False):
+            buttons = profile.get("buttons", {})
+            for action_key, btn_key, payload_str in [
+                ("my_auf", "my_up",   "MY_UP"),
+                ("my_zu",  "my_down", "MY_DOWN"),
+            ]:
+                btn = buttons.get(btn_key, {})
+                label = btn.get("label", action_key.title())
+                icon = btn.get("icon", "mdi:remote")
+                tilt_payload: Dict = {
+                    "name": f"{device.name} {label}",
+                    "unique_id": f"{device.unique_id_base}_{action_key}",
+                    "command_topic": command_topic,
+                    "payload_press": payload_str,
+                    "entity_category": "config",
+                    "icon": icon,
+                    "availability": avail,
+                    "device": sub_dev,
+                    "origin": ORIGIN,
+                }
+                self._client.publish(
+                    f"{HA_DISCOVERY}/button/{device.unique_id_base}_{action_key}/config",
+                    json.dumps(tilt_payload), retain=True,
+                )
+
         # PROG Lang + PROG Anlern Buttons (entity_category: config) — beide Modi
         self._register_prog_buttons(device, command_handler, sub_dev)
 
+        has_tilt = profile.get("has_tilt", False)
         if ha_platform == "cover":
-            logger.info("[Modus A] '%s' → Cover + 3 Diagnose-Sensoren + 2 PROG-Buttons auf %s", device.name, command_topic)
+            logger.info(
+                "[Modus A] '%s' → Cover + MY%s + 3 Diagnose-Sensoren + 2 PROG-Buttons auf %s",
+                device.name, " + MY_UP/DOWN" if has_tilt else "", command_topic,
+            )
         elif ha_platform in ("light", "switch"):
-            logger.info("[Modus A] '%s' → %s-Entity + 3 Diagnose-Sensoren + 2 PROG-Buttons auf %s", device.name, ha_platform, command_topic)
+            logger.info(
+                "[Modus A] '%s' → %s-Entity + MY + 3 Diagnose-Sensoren + 2 PROG-Buttons auf %s",
+                device.name, ha_platform, command_topic,
+            )
         else:
-            logger.info("[Modus A] '%s' → Nur 3 Diagnose-Sensoren + 2 PROG-Buttons (kein Haupt-Entity) auf %s", device.name, command_topic)
+            logger.info(
+                "[Modus A] '%s' → MY + 3 Diagnose-Sensoren + 2 PROG-Buttons (kein Haupt-Entity) auf %s",
+                device.name, command_topic,
+            )
 
     def _register_mode_b(
         self,
@@ -354,10 +411,30 @@ class MQTTClient:
                 self._client.publish(disc_topic, json.dumps(payload), retain=True)
                 self._subscribe(cmd_topic, lambda _payload, a=rts_action: command_handler(a))
 
-        # 2 Diagnose-Sensoren: rolling_code + last_command (mit raw_frame Attribut)
+        # MY Button (Lieblingsposition) — alle Gerätetypen, entity_category: config
+        my_cmd_topic = f"{prefix}/{slug}/button/my"
+        my_b_payload: Dict = {
+            "name": f"{device.name} MY",
+            "unique_id": f"{device.unique_id_base}_my",
+            "command_topic": my_cmd_topic,
+            "payload_press": "PRESS",
+            "entity_category": "config",
+            "icon": "mdi:heart",
+            "availability": avail,
+            "device": sub_dev,
+            "origin": ORIGIN,
+        }
+        self._client.publish(
+            f"{HA_DISCOVERY}/button/{device.unique_id_base}_my/config",
+            json.dumps(my_b_payload), retain=True,
+        )
+        self._subscribe(my_cmd_topic, lambda _payload: command_handler("MY"))
+
+        # 3 Diagnose-Sensoren: rolling_code + last_command + device_address
         for sensor_id, sensor_name, icon, attr_topic in [
-            ("rolling_code", "Rolling Code",   "mdi:counter", None),
-            ("last_command", "Letzter Befehl", "mdi:history", f"{prefix}/{slug}/last_command_attr"),
+            ("rolling_code",   "Rolling Code",   "mdi:counter",    None),
+            ("last_command",   "Letzter Befehl", "mdi:history",    f"{prefix}/{slug}/last_command_attr"),
+            ("device_address", "Adresse",        "mdi:identifier", None),
         ]:
             s_payload = {
                 "name": f"{device.name} {sensor_name}",
@@ -377,8 +454,11 @@ class MQTTClient:
         # PROG Lang + PROG Anlern Buttons (entity_category: config) — beide Modi
         self._register_prog_buttons(device, command_handler, sub_dev)
 
-        btn_count = 5 if profile.get("has_tilt", False) else 3
-        logger.info("[Modus B] '%s' → %d Buttons + 2 PROG-Buttons + 2 Sensoren", device.name, btn_count)
+        action_btn_count = 5 if profile.get("has_tilt", False) else 3
+        logger.info(
+            "[Modus B] '%s' → %d Buttons + MY + 2 PROG-Buttons + 3 Sensoren",
+            device.name, action_btn_count,
+        )
 
     def _register_prog_buttons(
         self,
@@ -527,6 +607,7 @@ def state_topics(device: DeviceConfig) -> list[str]:
         f"{MQTT_TOPIC_PREFIX}/{slug}/rolling_code",
         f"{MQTT_TOPIC_PREFIX}/{slug}/last_command",
         f"{MQTT_TOPIC_PREFIX}/{slug}/last_command_attr",
+        f"{MQTT_TOPIC_PREFIX}/{slug}/device_address",
     ]
 
 
@@ -547,15 +628,16 @@ def discovery_topics(device: DeviceConfig) -> list[str]:
         Liste aller homeassistant/{component}/{unique_id}/config Topics.
     """
     uid = device.unique_id_base
-    # Gemeinsame Topics (beide Modi): PROG-Buttons + Diagnose-Sensoren
+    # Gemeinsame Topics (beide Modi): PROG-Buttons + MY-Button + Diagnose-Sensoren
     topics = [
         f"{HA_DISCOVERY}/button/{uid}_prog_long/config",
         f"{HA_DISCOVERY}/button/{uid}_prog_pair/config",
+        f"{HA_DISCOVERY}/button/{uid}_my/config",
         f"{HA_DISCOVERY}/sensor/{uid}_rolling_code/config",
         f"{HA_DISCOVERY}/sensor/{uid}_last_command/config",
     ]
 
-    # Geräteprofil laden — für ha_platform (Modus A) und has_tilt (Modus B)
+    # Geräteprofil laden — für ha_platform (Modus A) und has_tilt
     profile: Dict = {}
     try:
         import os as _os
@@ -571,6 +653,7 @@ def discovery_topics(device: DeviceConfig) -> list[str]:
             f"{HA_DISCOVERY}/button/{uid}_auf/config",
             f"{HA_DISCOVERY}/button/{uid}_zu/config",
             f"{HA_DISCOVERY}/button/{uid}_stop/config",
+            f"{HA_DISCOVERY}/sensor/{uid}_device_address/config",
         ]
         # MY_UP / MY_DOWN Tilt-Buttons nur für Jalousien (has_tilt: true)
         if profile.get("has_tilt", False):
@@ -584,5 +667,11 @@ def discovery_topics(device: DeviceConfig) -> list[str]:
             topics.append(f"{HA_DISCOVERY}/{ha_platform}/{uid}/config")
         # ha_platform is None (light_dimmer): kein Haupt-Entity-Topic
         topics.append(f"{HA_DISCOVERY}/sensor/{uid}_device_address/config")
+        # MY_UP / MY_DOWN Tilt-Buttons nur für Jalousien (has_tilt: true)
+        if profile.get("has_tilt", False):
+            topics += [
+                f"{HA_DISCOVERY}/button/{uid}_my_auf/config",
+                f"{HA_DISCOVERY}/button/{uid}_my_zu/config",
+            ]
 
     return topics

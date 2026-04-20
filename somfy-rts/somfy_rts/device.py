@@ -11,7 +11,6 @@ Diagnose-Sensoren (beide Modi):
   rolling_code   — aktueller Rolling-Code-Wert nach jedem Befehl
   last_command   — letzter gesendeter Befehl (OPEN/CLOSE/STOP/MY/PROG/…)
                    json_attributes: {"raw_frame": "YsA0…"} (vollständiger Telegram-String)
-Nur Modus A zusätzlich:
   device_address — statische Hex-Adresse des virtuellen Senders
 
 PROG-Befehle (beide Modi):
@@ -139,10 +138,11 @@ class Device:
         if self._device.mode == "A":
             self._mqtt.publish_state(self._device, self._state)
             self._publish_diagnostics()
-            # device_address ist statisch — einmalig beim Setup publizieren
-            self._mqtt.publish_diagnostic(self._device, "device_address", self._device.address)
         elif self._device.mode == "B":
             self._publish_diagnostics()
+
+        # device_address ist statisch — einmalig beim Setup publizieren (beide Modi)
+        self._mqtt.publish_diagnostic(self._device, "device_address", self._device.address)
 
         logger.info(
             "Gerät '%s' bereit — Typ=%s | Modus=%s | Adresse=%s",

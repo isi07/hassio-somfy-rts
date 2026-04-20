@@ -182,19 +182,17 @@ async function deleteDevice(addr, name, cardEl) {
   } catch(e) { alert("Fehler beim Löschen: " + e.message); }
 }
 
-function renderMyRow(myButtons) {
-  if (myButtons === "my_full") {
-    return `<div class="cmd-row mt">
+function renderMyButtons(type) {
+  // MY (Lieblingsposition/Stop) immer sichtbar für alle Gerätetypen
+  let html = `<div class="cmd-row mt"><button class="btn btn-my" data-action="STOP">■ MY</button></div>`;
+  // MY_UP + MY_DOWN zusätzlich nur für Jalousie (Lamellensteuerung)
+  if (type === "blind") {
+    html += `<div class="cmd-row mt">
       <button class="btn btn-my" data-action="MY_UP">MY ▲</button>
       <button class="btn btn-my" data-action="MY_DOWN">MY ▼</button>
     </div>`;
   }
-  if (myButtons === "my") {
-    return `<div class="cmd-row mt">
-      <button class="btn btn-my" data-action="STOP">■ MY</button>
-    </div>`;
-  }
-  return "";
+  return html;
 }
 
 function renderDevice(d) {
@@ -217,7 +215,7 @@ function renderDevice(d) {
       <button class="btn btn-stop" data-action="STOP">■ STOP</button>
       <button class="btn btn-dn"   data-action="CLOSE">${lbl.dn_arrow||"▼"} ${escHtml(lbl.dn)}</button>
     </div>
-    ${renderMyRow(lbl.my_buttons || "my")}
+    ${renderMyButtons(type)}
     <div class="cmd-row mt">
       <button class="btn btn-prog-long"  data-prog="prog-long"  title="PROG Yr14 — versetzt den Motor in den Anlernmodus (ersetzt PROG-Taste der Original-FB)">⏱ PROG Lang</button>
       <button class="btn btn-prog-pair"  data-prog="prog-pair"  title="PROG Yr4 — lernt den virtuellen Sender am Motor an (oder ab)">📡 PROG Anlern</button>
