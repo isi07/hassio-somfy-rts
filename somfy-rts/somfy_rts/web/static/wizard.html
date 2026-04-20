@@ -56,8 +56,9 @@
           <option value="blind">Jalousie / Raffstore</option>
           <option value="screen">Insektenschutzrollo</option>
           <option value="gate">Garagentor / Einfahrtstor</option>
-          <option value="light">Somfy-Licht</option>
-          <option value="heater">Heizung</option>
+          <option value="light">Somfy-Licht (EIN/AUS)</option>
+          <option value="heater">Heizung (EIN/AUS)</option>
+          <option value="light_dimmer">Somfy Lighting Dimmer</option>
         </select>
       </div>
       <div class="form-group">
@@ -66,7 +67,10 @@
           <option value="A" selected>A — Cover-Entity (optimistisch)</option>
           <option value="B">B — Buttons + Sensoren (Template Cover)</option>
         </select>
-        <div class="form-hint">Modus A: direkte Steuerung über eine Cover-Entity. Modus B: drei Buttons + Diagnose-Sensoren für Template Cover mit Blueprint.</div>
+        <div class="form-hint">Modus A: direkte Steuerung über eine Cover-, Light- oder Switch-Entity. Modus B: drei Buttons + Diagnose-Sensoren für Template Cover mit Blueprint.</div>
+        <div id="dimmer-hint" style="display:none;margin-top:.4rem;padding:.5rem .7rem;background:#3a2a00;border:1px solid #f0a500;border-radius:var(--radius);color:#f0c060;font-size:.83rem">
+          ⚠️ Somfy Lighting Dimmer unterstützt kein echtes Brightness-API — nur <strong>Modus B</strong> ist sinnvoll. Dimm-Steuerung über HA-Automationen einrichten.
+        </div>
       </div>
       <div id="step1-err" class="alert alert-err hidden"></div>
       <div class="flex gap mt-lg">
@@ -200,6 +204,21 @@ function showErr(id, msg) {
   el.classList.remove("hidden");
 }
 function hideErr(id) { document.getElementById(id).classList.add("hidden"); }
+
+// Gerätetyp-Auswahl: light_dimmer sperrt Modus A
+document.getElementById("dev-type").addEventListener("change", function() {
+  const isDimmer = this.value === "light_dimmer";
+  const modeSelect = document.getElementById("dev-mode");
+  const hint = document.getElementById("dimmer-hint");
+  if (isDimmer) {
+    modeSelect.value = "B";
+    Array.from(modeSelect.options).forEach(opt => { if (opt.value === "A") opt.disabled = true; });
+    hint.style.display = "block";
+  } else {
+    Array.from(modeSelect.options).forEach(opt => { opt.disabled = false; });
+    hint.style.display = "none";
+  }
+});
 
 // Step 1 → Start wizard
 document.getElementById("btn-start").addEventListener("click", async () => {

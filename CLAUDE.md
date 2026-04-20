@@ -329,15 +329,42 @@ Geräte werden **nicht** in `config.yaml` verwaltet, sondern in `/data/somfy_cod
 
 ## Gerätetypen (`device_profiles.json`)
 
-| Typ | HA device_class | Icon |
-|-----|----------------|------|
-| awning | awning | mdi:awning |
-| shutter | shutter | mdi:window-shutter |
-| blind | blind | mdi:blinds |
-| screen | shade | mdi:roller-shade |
-| gate | gate | mdi:gate |
-| light | — | mdi:lightbulb |
-| heater | — | mdi:radiator |
+| Typ | HA device_class | ha_platform | has_tilt | Icon |
+|-----|----------------|-------------|---------|------|
+| awning | awning | cover | false | mdi:awning |
+| shutter | shutter | cover | false | mdi:window-shutter |
+| blind | blind | cover | **true** | mdi:blinds |
+| screen | shade | cover | false | mdi:roller-shade |
+| gate | gate | cover | false | mdi:gate |
+| light | — | **light** | false | mdi:lightbulb |
+| heater | — | **switch** | false | mdi:radiator |
+| light_dimmer | — | **null** (nur Modus B) | false | mdi:lightbulb-on |
+
+### ha_platform
+
+`ha_platform` bestimmt den HA Discovery Entity-Typ in **Modus A**:
+- `"cover"` → MQTT Cover-Entity (OPEN/CLOSE/STOP, device_class je Typ)
+- `"light"` → MQTT Light-Entity (ON/OFF, optimistic) — Somfy Lighting Slim Receiver
+- `"switch"` → MQTT Switch-Entity (ON/OFF, optimistic) — Somfy Heat Receiver
+- `null` → kein Haupt-Entity (light_dimmer: nur Modus B empfohlen)
+
+HA MQTT light/switch senden `"ON"`/`"OFF"` auf das Command-Topic.
+`device._handle_command()` normalisiert ON→OPEN, OFF→CLOSE vor der command_map-Übersetzung.
+In Modus A publiziert das Gerät den Zustand als `"ON"`/`"OFF"` für light/switch (nicht "open"/"closed").
+
+### has_tilt
+
+`has_tilt: true` aktiviert zusätzliche **MY_UP** / **MY_DOWN** Lamellen-Buttons in **Modus B**:
+- Modus B: 5 Buttons (auf/zu/stop/**my_auf**/**my_zu**) statt 3
+- Discovery: 9 Topics statt 7 (inkl. `button/{uid}_my_auf` und `button/{uid}_my_zu`)
+- Aktuell nur `blind` (Jalousie/Raffstore) hat `has_tilt: true`
+
+### light_dimmer (nur Modus B)
+
+- Somfy Lighting Dimmer: Impulse UP/DOWN/MY — kein echtes Brightness-API möglich
+- Wizard und Import-Modal: Modus A deaktiviert, Modus B vorausgewählt
+- Modus B Buttons: **Hochdimmen** (UP) / **Abdimmen** (DOWN) / **Helligkeit merken** (MY)
+- `ha_platform: null` → kein Modus-A-Haupt-Entity; PROG-Buttons + Diagnose-Sensoren bleiben
 
 ---
 

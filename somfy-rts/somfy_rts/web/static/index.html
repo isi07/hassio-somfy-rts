@@ -73,8 +73,9 @@
         <option value="blind">Jalousie / Raffstore</option>
         <option value="screen">Insektenschutzrollo</option>
         <option value="gate">Garagentor / Einfahrtstor</option>
-        <option value="light">Somfy-Licht</option>
-        <option value="heater">Heizung</option>
+        <option value="light">Somfy-Licht (EIN/AUS)</option>
+        <option value="heater">Heizung (EIN/AUS)</option>
+        <option value="light_dimmer">Somfy Lighting Dimmer</option>
       </select>
     </div>
     <div class="form-group">
@@ -108,7 +109,7 @@
 <script>
 const TYPE_LABEL = {
   awning:"Markise", shutter:"Rollladen", blind:"Jalousie",
-  screen:"Rollo", gate:"Tor", light:"Licht", heater:"Heizung"
+  screen:"Rollo", gate:"Tor", light:"Licht", heater:"Heizung", light_dimmer:"Dimmer"
 };
 const CMD_LABELS = {
   // Markise: OPEN-Button = Ausfahren ↓ (RTS DOWN), CLOSE-Button = Einfahren ↑ (RTS UP)
@@ -116,12 +117,16 @@ const CMD_LABELS = {
   awning: {up:"Ausfahren",  dn:"Einfahren",    up_arrow:"▼", dn_arrow:"▲", my_buttons:"my"},
   // Rollladen: OPEN-Button = Hochfahren ↑ (RTS UP), CLOSE-Button = Runterfahren ↓ (RTS DOWN)
   shutter:{up:"Hochfahren", dn:"Runterfahren", my_buttons:"my"},
-  // Alle anderen: OPEN-Button = Auf ↑, CLOSE-Button = Zu ↓
+  // Jalousie: MY_UP / MY_DOWN für Lamellensteuerung
   blind:  {up:"Auf",        dn:"Zu",           my_buttons:"my_full"},
   screen: {up:"Auf",        dn:"Zu",           my_buttons:"my"},
   gate:   {up:"Auf",        dn:"Zu",           my_buttons:"my"},
-  light:  {up:"Auf",        dn:"Zu",           my_buttons:"none"},
-  heater: {up:"Auf",        dn:"Zu",           my_buttons:"none"},
+  // Licht (Slim Receiver): EIN/AUS — HA light-Entity in Modus A
+  light:  {up:"Ein",        dn:"Aus",          my_buttons:"none"},
+  // Heizung (Heat Receiver): EIN/AUS — HA switch-Entity in Modus A
+  heater: {up:"Ein",        dn:"Aus",          my_buttons:"none"},
+  // Dimmer: nur Modus B — Impulse UP/DOWN/MY
+  light_dimmer: {up:"Hochdimmen", dn:"Abdimmen", my_buttons:"none"},
 };
 
 async function apiFetch(path, opts) {

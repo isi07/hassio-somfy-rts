@@ -45,6 +45,8 @@ _COMMAND_DISPLAY: Dict[str, str] = {
 # Spiegelt das shutter-Profil mit korrekten Schicht-2-Begriffen wider.
 # Normalerweise wird stattdessen profiles.get("shutter", _FALLBACK_PROFILE) genutzt.
 _FALLBACK_PROFILE: Dict[str, Any] = {
+    "ha_platform": "cover",
+    "has_tilt": False,
     "device_class": "shutter",
     "icon": "mdi:window-shutter",
     "my_buttons": "my",
@@ -120,6 +122,16 @@ class Device:
         )
         self._state = "stopped"
 
+    @property
+    def ha_platform(self) -> Optional[str]:
+        """HA Discovery-Plattform aus device_profiles.json: 'cover', 'light', 'switch' oder None."""
+        return self._profile.get("ha_platform", "cover")
+
+    @property
+    def has_tilt(self) -> bool:
+        """True für Geräte mit Lamellensteuerung (z.B. blind/Jalousie): MY_UP / MY_DOWN."""
+        return bool(self._profile.get("has_tilt", False))
+
     def setup(self) -> None:
         """Registriert das Gerät in HA via MQTT Discovery und publiziert Initialzustand."""
         self._mqtt.register_device(self._device, self._handle_command, self._profile)
@@ -152,6 +164,11 @@ class Device:
         PROG_LONG/PROG_PAIR: direkt → PROG mit repeat=14/4 (kein command_map, beide Modi)
         """
         command = command.upper()
+        # Normalisierung: HA MQTT light/switch sendet "ON"/"OFF" statt "OPEN"/"CLOSE"
+        if command == "ON":
+            command = "OPEN"
+        elif command == "OFF":
+            command = "CLOSE"
         # Layer 1 (Schicht 1, HA-Semantik):  OPEN, CLOSE, STOP  → wird per command_map übersetzt
         # Layer 2 (Schicht 2, RTS-Protokoll): UP, DOWN, MY       → direkt (Mode B, MY_*, PROG)
         # PROG mit repeat:                    PROG_LONG (Yr14), PROG_PAIR (Yr4) → beide Modi
@@ -198,7 +215,12 @@ class Device:
             return  # Fehler bereits geloggt in _send_rts()
 
         if self._device.mode == "A":
-            self._state = _command_to_state(command)  # HA-Zustand anhand des Original-Befehls
+            # ha_platform bestimmt, welchen Zustand HA erwartet:
+            # light/switch: "ON"/"OFF" — cover: "open"/"closed"/"stopped"
+            if self.ha_platform in ("light", "switch"):
+                self._state = "ON" if command == "OPEN" else "OFF"
+            else:
+                self._state = _command_to_state(command)
             self._mqtt.publish_state(self._device, self._state)
             self._publish_diagnostics(last_command=rts_action, raw_frame=seq.frame)
         elif self._device.mode == "B":

@@ -196,9 +196,13 @@ class MQTTClient:
         command_handler: Callable[[str], None],
         profile: Dict,
     ) -> None:
-        """Modus A: Optimistisches MQTT Cover-Entity + 3 Diagnose-Sensoren.
+        """Modus A: Haupt-Entity (Cover/Light/Switch) + 3 Diagnose-Sensoren + 2 PROG-Buttons.
 
-        Cover: device_class kommt aus dem Profil (device_profiles.json).
+        ha_platform aus device_profiles.json bestimmt den Entity-Typ:
+          "cover"  → MQTT Cover-Entity (optimistisch, OPEN/CLOSE/STOP)
+          "light"  → MQTT Light-Entity (optimistisch, ON/OFF)
+          "switch" → MQTT Switch-Entity (optimistisch, ON/OFF)
+          None     → kein Haupt-Entity (light_dimmer: nur Modus B sinnvoll)
         Sensoren: rolling_code, last_command (json_attributes_topic für raw_frame),
                   device_address (statisch, nur einmal publiziert).
         """
@@ -207,35 +211,57 @@ class MQTTClient:
         state_topic = f"{prefix}/{slug}/state"
         command_topic = f"{prefix}/{slug}/set"
         sub_dev = _sub_device(device, profile)
+        avail = _avail_block()
+        ha_platform = profile.get("ha_platform", "cover")
 
-        cover_payload: Dict = {
-            "name": device.name,
-            "unique_id": f"{device.unique_id_base}_cover",
-            "state_topic": state_topic,
-            "command_topic": command_topic,
-            "payload_open": "OPEN",
-            "payload_close": "CLOSE",
-            "payload_stop": "STOP",
-            "state_open": "open",
-            "state_closed": "closed",
-            "state_stopped": "stopped",
-            "optimistic": True,
-            "availability": _avail_block(),
-            "device": sub_dev,
-            "origin": ORIGIN,
-        }
-        device_class = profile.get("device_class")
-        if device_class:
-            cover_payload["device_class"] = device_class
+        if ha_platform == "cover":
+            cover_payload: Dict = {
+                "name": device.name,
+                "unique_id": f"{device.unique_id_base}_cover",
+                "state_topic": state_topic,
+                "command_topic": command_topic,
+                "payload_open": "OPEN",
+                "payload_close": "CLOSE",
+                "payload_stop": "STOP",
+                "state_open": "open",
+                "state_closed": "closed",
+                "state_stopped": "stopped",
+                "optimistic": True,
+                "availability": avail,
+                "device": sub_dev,
+                "origin": ORIGIN,
+            }
+            device_class = profile.get("device_class")
+            if device_class:
+                cover_payload["device_class"] = device_class
+            disc_topic = f"{HA_DISCOVERY}/cover/{device.unique_id_base}/config"
+            self._client.publish(disc_topic, json.dumps(cover_payload), retain=True)
 
-        disc_topic = f"{HA_DISCOVERY}/cover/{device.unique_id_base}/config"
-        self._client.publish(disc_topic, json.dumps(cover_payload), retain=True)
+        elif ha_platform in ("light", "switch"):
+            # Light- oder Switch-Entity: HA sendet "ON"/"OFF", Device übersetzt intern nach OPEN/CLOSE
+            entity_payload: Dict = {
+                "name": device.name,
+                "unique_id": f"{device.unique_id_base}_{ha_platform}",
+                "command_topic": command_topic,
+                "state_topic": state_topic,
+                "payload_on": "ON",
+                "payload_off": "OFF",
+                "state_on": "ON",
+                "state_off": "OFF",
+                "optimistic": True,
+                "availability": avail,
+                "device": sub_dev,
+                "origin": ORIGIN,
+            }
+            disc_topic = f"{HA_DISCOVERY}/{ha_platform}/{device.unique_id_base}/config"
+            self._client.publish(disc_topic, json.dumps(entity_payload), retain=True)
+        # ha_platform is None (z.B. light_dimmer): kein Haupt-Entity registrieren
 
-        # 3 Diagnose-Sensoren
+        # 3 Diagnose-Sensoren (für alle ha_platform-Werte inkl. None)
         diag_sensors = [
-            ("rolling_code",   "Rolling Code",    "mdi:counter",    None),
-            ("last_command",   "Letzter Befehl",  "mdi:history",    f"{prefix}/{slug}/last_command_attr"),
-            ("device_address", "Adresse",         "mdi:identifier", None),
+            ("rolling_code",   "Rolling Code",   "mdi:counter",    None),
+            ("last_command",   "Letzter Befehl", "mdi:history",    f"{prefix}/{slug}/last_command_attr"),
+            ("device_address", "Adresse",        "mdi:identifier", None),
         ]
         for sensor_id, sensor_name, icon, attr_topic in diag_sensors:
             s_payload: Dict = {
@@ -244,7 +270,7 @@ class MQTTClient:
                 "state_topic": f"{prefix}/{slug}/{sensor_id}",
                 "entity_category": "diagnostic",
                 "icon": icon,
-                "availability": _avail_block(),
+                "availability": avail,
                 "device": sub_dev,
                 "origin": ORIGIN,
             }
@@ -258,7 +284,12 @@ class MQTTClient:
         # PROG Lang + PROG Anlern Buttons (entity_category: config) — beide Modi
         self._register_prog_buttons(device, command_handler, sub_dev)
 
-        logger.info("[Modus A] '%s' → Cover + 3 Diagnose-Sensoren + 2 PROG-Buttons auf %s", device.name, command_topic)
+        if ha_platform == "cover":
+            logger.info("[Modus A] '%s' → Cover + 3 Diagnose-Sensoren + 2 PROG-Buttons auf %s", device.name, command_topic)
+        elif ha_platform in ("light", "switch"):
+            logger.info("[Modus A] '%s' → %s-Entity + 3 Diagnose-Sensoren + 2 PROG-Buttons auf %s", device.name, ha_platform, command_topic)
+        else:
+            logger.info("[Modus A] '%s' → Nur 3 Diagnose-Sensoren + 2 PROG-Buttons (kein Haupt-Entity) auf %s", device.name, command_topic)
 
     def _register_mode_b(
         self,
@@ -299,6 +330,30 @@ class MQTTClient:
 
             self._subscribe(cmd_topic, lambda _payload, a=rts_action: command_handler(a))
 
+        # MY_UP / MY_DOWN Tilt-Buttons — nur für Jalousien mit Lamellensteuerung (has_tilt: true)
+        if profile.get("has_tilt", False):
+            tilt_btn_cfg = [("my_auf", "my_up"), ("my_zu", "my_down")]
+            for action_key, btn_key in tilt_btn_cfg:
+                btn = buttons.get(btn_key, {})
+                label = btn.get("label", action_key.title())
+                icon = btn.get("icon", "mdi:remote")
+                rts_action = btn.get("rts", btn_key.upper())
+                cmd_topic = f"{prefix}/{slug}/button/{action_key}"
+                payload = {
+                    "name": f"{device.name} {label}",
+                    "unique_id": f"{device.unique_id_base}_btn_{action_key}",
+                    "command_topic": cmd_topic,
+                    "payload_press": "PRESS",
+                    "entity_category": "config",
+                    "icon": icon,
+                    "availability": avail,
+                    "device": sub_dev,
+                    "origin": ORIGIN,
+                }
+                disc_topic = f"{HA_DISCOVERY}/button/{device.unique_id_base}_{action_key}/config"
+                self._client.publish(disc_topic, json.dumps(payload), retain=True)
+                self._subscribe(cmd_topic, lambda _payload, a=rts_action: command_handler(a))
+
         # 2 Diagnose-Sensoren: rolling_code + last_command (mit raw_frame Attribut)
         for sensor_id, sensor_name, icon, attr_topic in [
             ("rolling_code", "Rolling Code",   "mdi:counter", None),
@@ -322,7 +377,8 @@ class MQTTClient:
         # PROG Lang + PROG Anlern Buttons (entity_category: config) — beide Modi
         self._register_prog_buttons(device, command_handler, sub_dev)
 
-        logger.info("[Modus B] '%s' → 3 Buttons + 2 PROG-Buttons + 2 Sensoren", device.name)
+        btn_count = 5 if profile.get("has_tilt", False) else 3
+        logger.info("[Modus B] '%s' → %d Buttons + 2 PROG-Buttons + 2 Sensoren", device.name, btn_count)
 
     def _register_prog_buttons(
         self,
@@ -481,6 +537,9 @@ def discovery_topics(device: DeviceConfig) -> list[str]:
     um sicherzustellen dass Registrierung und Deregistrierung immer dieselben
     Topics nutzen.
 
+    Lädt device_profiles.json für ha_platform (Modus A) und has_tilt (Modus B),
+    damit nur tatsächlich registrierte Topics gecleart werden.
+
     Args:
         device: Gerätekonfiguration (name, type, address, mode).
 
@@ -495,15 +554,35 @@ def discovery_topics(device: DeviceConfig) -> list[str]:
         f"{HA_DISCOVERY}/sensor/{uid}_rolling_code/config",
         f"{HA_DISCOVERY}/sensor/{uid}_last_command/config",
     ]
+
+    # Geräteprofil laden — für ha_platform (Modus A) und has_tilt (Modus B)
+    profile: Dict = {}
+    try:
+        import os as _os
+        _profiles_path = _os.path.join(_os.path.dirname(__file__), "device_profiles.json")
+        with open(_profiles_path, encoding="utf-8") as _f:
+            _profiles = json.load(_f)
+        profile = _profiles.get(device.type, {})
+    except Exception:
+        pass
+
     if device.mode == "B":
         topics += [
             f"{HA_DISCOVERY}/button/{uid}_auf/config",
             f"{HA_DISCOVERY}/button/{uid}_zu/config",
             f"{HA_DISCOVERY}/button/{uid}_stop/config",
         ]
+        # MY_UP / MY_DOWN Tilt-Buttons nur für Jalousien (has_tilt: true)
+        if profile.get("has_tilt", False):
+            topics += [
+                f"{HA_DISCOVERY}/button/{uid}_my_auf/config",
+                f"{HA_DISCOVERY}/button/{uid}_my_zu/config",
+            ]
     else:  # Modus A
-        topics += [
-            f"{HA_DISCOVERY}/cover/{uid}/config",
-            f"{HA_DISCOVERY}/sensor/{uid}_device_address/config",
-        ]
+        ha_platform = profile.get("ha_platform", "cover")
+        if ha_platform in ("cover", "light", "switch"):
+            topics.append(f"{HA_DISCOVERY}/{ha_platform}/{uid}/config")
+        # ha_platform is None (light_dimmer): kein Haupt-Entity-Topic
+        topics.append(f"{HA_DISCOVERY}/sensor/{uid}_device_address/config")
+
     return topics

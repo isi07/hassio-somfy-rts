@@ -55,15 +55,25 @@ durch den Anlern-Wizard in `/data/somfy_codes.json` verwaltet.
 
 ## Gerätetypen
 
-| Typ | HA Geräteklasse | Verwendung |
-|-----|----------------|-----------|
-| `awning` | awning | Markise |
-| `shutter` | shutter | Rollladen |
-| `blind` | blind | Jalousie / Raffstore |
-| `screen` | shade | Insektenschutzrollo |
-| `gate` | gate | Garagentor / Einfahrtstor |
-| `light` | — | Somfy-kompatibles Licht |
-| `heater` | — | Heizung |
+| Typ | HA Entität (Modus A) | Verwendung |
+|-----|---------------------|-----------|
+| `awning` | Cover (awning) | Markise |
+| `shutter` | Cover (shutter) | Rollladen |
+| `blind` | Cover (blind) | Jalousie / Raffstore — inkl. MY_UP/MY_DOWN Lamellensteuerung |
+| `screen` | Cover (shade) | Insektenschutzrollo |
+| `gate` | Cover (gate) | Garagentor / Einfahrtstor |
+| `light` | **Light** (EIN/AUS) | Somfy Lighting Slim Receiver |
+| `heater` | **Switch** (EIN/AUS) | Somfy Heat Receiver |
+| `light_dimmer` | — (nur Modus B) | Somfy Lighting Dimmer (Impulse UP/DOWN/MY) |
+
+**Hinweis light / heater:** HA sendet `ON`/`OFF` an das Command-Topic; die App übersetzt
+das intern in RTS UP bzw. DOWN. Der Zustand wird als `ON`/`OFF` zurückgemeldet.
+
+**Hinweis light_dimmer:** Kein echtes Brightness-API möglich — Modus B mit HA-Automationen
+verwenden (z.B. bei Tastendruck dimmen). Modus A ist für diesen Typ deaktiviert.
+
+**Hinweis blind:** In Modus B werden zusätzlich **MY Auf** (`MY_UP`) und **MY Runter**
+(`MY_DOWN`) als separate Button-Entitäten registriert (Lamellensteuerung via Jalousie-Lamellen).
 
 ---
 
@@ -73,12 +83,14 @@ Die App unterstützt zwei Betriebsmodi pro Gerät:
 
 | Modus | HA Discovery | Verwendung |
 |-------|-------------|-----------|
-| **A** | 1× Cover-Entität (optimistisch) | Direkte Steuerung, einfachste Einrichtung |
-| **B** | 3× Button + 2× Diagnose-Sensor | Für Template Covers mit Blueprints |
+| **A** | 1× Cover / Light / Switch-Entität (optimistisch) | Direkte Steuerung, einfachste Einrichtung |
+| **B** | 3–5× Button + 2× Diagnose-Sensor | Für Template Covers mit Blueprints |
 
 **Modus A** eignet sich für die meisten Anwendungsfälle — auch für Blueprints.  
 **Modus B** eignet sich für fortgeschrittene Automatisierungen, die direkt auf
 die einzelnen Buttons (Auf/Zu/Stop) reagieren möchten.
+
+Für `light_dimmer` ist ausschließlich **Modus B** sinnvoll (Impulse via HA-Automationen).
 
 ---
 

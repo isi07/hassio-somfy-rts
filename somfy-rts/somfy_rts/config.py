@@ -18,7 +18,7 @@ _SLUG_RE = re.compile(r"[^a-z0-9]+")
 @dataclass
 class DeviceConfig:
     name: str
-    type: str    # awning | shutter | blind | screen | gate | light | heater
+    type: str    # awning | shutter | blind | screen | gate | light | heater | light_dimmer
     address: str  # 3-byte hex, e.g. "A1B2C3"
     mode: str = "A"  # A = optimistic cover entity | B = 3 buttons + diagnostic sensors
 
