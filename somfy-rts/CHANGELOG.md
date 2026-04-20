@@ -4,11 +4,14 @@ Alle nennenswerten Änderungen werden hier dokumentiert.
 Format: [Conventional Commits](https://www.conventionalcommits.org/de/)
 
 
-## [0.3.16] - 2026-04-19
+## [0.3.17] - 2026-04-20
 
-### Fehlerbehebungen
+### Dokumentation
 
-- PROG_LONG Yr14, PROG_PAIR Yr4, Auto-Reconnect bei I/O Error
-- Debug-Panel nur via Settings steuerbar, Repeat-Default auf 1
+- Hinweis zur Big-Endian Adress-Darstellung in culfw-Befehlen
+
+### Neu hinzugefügt
+
+- Ha_platform pro Gerätetyp, light als HA light-Entity, heater als switch, light_dimmer nur Modus B, Tilt-Buttons nur für Jalousien
 
 
