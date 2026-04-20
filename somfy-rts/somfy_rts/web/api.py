@@ -26,7 +26,6 @@ Endpoints:
   GET  /api/logs/download             → download /share/somfy_rts/rts_frames.log
 """
 
-import json
 import logging
 import pathlib
 import re
