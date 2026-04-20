@@ -275,6 +275,7 @@ document.getElementById("btn-send-prog").addEventListener("click", async () => {
   } catch(e) {
     document.getElementById("prog-status").innerHTML = "";
     showErr("step3-err", "Sendefehler: " + e.message);
+  } finally {
     btn.disabled = false;
   }
 });
@@ -307,6 +308,11 @@ document.getElementById("btn-retry").addEventListener("click", async () => {
 // Step 5 → New or cancel
 document.getElementById("btn-new").addEventListener("click", () => {
   document.getElementById("dev-name").value = "";
+  // Schritt-3-Zustand vollständig zurücksetzen für den nächsten Durchlauf
+  document.getElementById("prog-status").innerHTML = "";
+  document.getElementById("btn-send-prog").disabled = false;
+  document.getElementById("btn-prog-long").disabled = false;
+  hideErr("step3-err");
   showStep(1);
 });
 document.getElementById("btn-cancel").addEventListener("click", async () => {

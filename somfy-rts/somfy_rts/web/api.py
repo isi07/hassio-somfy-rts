@@ -26,6 +26,7 @@ Endpoints:
   GET  /api/logs/download             → download /share/somfy_rts/rts_frames.log
 """
 
+import json
 import logging
 import pathlib
 import re
@@ -39,7 +40,7 @@ from ..config import Config, DeviceConfig
 from ..device import Device, resolve_rts_action
 from ..gateway import BaseGateway, SimGateway
 from ..mqtt_client import MQTTClient
-from ..rolling_code import _load, _save_atomic
+from ..rolling_code import _load, _save_atomic, get_current
 from ..rts import build_rts_sequence, log_rts_frame
 from ..wizard import PairingWizard
 
@@ -47,8 +48,32 @@ routes = web.RouteTableDef()
 logger = logging.getLogger(__name__)
 
 _HEX_ADDR_RE = re.compile(r"^[0-9A-Fa-f]{6}$")
-_VALID_DEVICE_TYPES = {"awning", "shutter", "blind", "screen", "gate", "light", "heater"}
+_VALID_DEVICE_TYPES = {"awning", "shutter", "blind", "screen", "gate", "light", "heater", "light_dimmer"}
 _VALID_MODES = {"A", "B"}
+
+# ha_platform je Gerätetyp — spiegelt device_profiles.json; für MQTT State-Publishing.
+# "cover" ist der Default für alle Cover-Typen (awning/shutter/blind/screen/gate).
+_HA_PLATFORM_BY_TYPE: dict = {
+    "light": "light",
+    "heater": "switch",
+    "light_dimmer": None,  # kein Modus-A-Entity
+}
+
+
+def _device_ha_platform(device_type: str) -> Optional[str]:
+    """Gibt die ha_platform aus device_profiles.json zurück ('cover', 'light', 'switch', None)."""
+    return _HA_PLATFORM_BY_TYPE.get(device_type, "cover")
+
+
+def _api_command_to_state(command: str) -> str:
+    """Übersetzt HA-Semantik-Befehl in MQTT Cover-Zustandsstring für Modus-A-State-Publishing."""
+    return {
+        "OPEN":    "open",
+        "CLOSE":   "closed",
+        "STOP":    "stopped",
+        "MY_UP":   "open",
+        "MY_DOWN": "closed",
+    }.get(command, "stopped")
 
 # ---------- AppContext ----------
 
@@ -260,6 +285,30 @@ async def send_command(request: web.Request) -> web.Response:
         raise web.HTTPInternalServerError(reason=str(exc)) from exc
 
     log_rts_frame(seq, addr, rts_action, success=True)
+
+    # MQTT-Diagnose-Updates nach erfolgreichem Senden:
+    # rolling_code, last_command, raw_frame und state (Modus A) publizieren.
+    if ctx.mqtt_client is not None:
+        device_mode = device.get("mode", "A")
+        device_cfg_mqtt = DeviceConfig(
+            name=device.get("name", addr),
+            type=device_type,
+            address=addr,
+            mode=device_mode,
+        )
+        rc = get_current(addr)
+        ctx.mqtt_client.publish_diagnostic(device_cfg_mqtt, "rolling_code", str(rc))
+        display_cmd = {"MY_UP": "MY", "MY_DOWN": "MY"}.get(rts_action, rts_action)
+        ctx.mqtt_client.publish_diagnostic(device_cfg_mqtt, "last_command", display_cmd)
+        ctx.mqtt_client.publish_json_attributes(device_cfg_mqtt, "last_command", {"raw_frame": seq.frame})
+        # State nur in Modus A, nicht für PROG-Befehle
+        if device_mode == "A" and action != "PROG":
+            ha_platform = _device_ha_platform(device_type)
+            if ha_platform in ("light", "switch"):
+                state_val = "ON" if action == "OPEN" else "OFF"
+            else:
+                state_val = _api_command_to_state(action)
+            ctx.mqtt_client.publish_state(device_cfg_mqtt, state_val)
 
     logger.info("API: %s → %s gesendet.", addr, rts_action)
     return web.json_response({"status": "sent", "action": rts_action, "address": addr})
@@ -522,6 +571,8 @@ async def wizard_confirm(request: web.Request) -> web.Response:
         )
         dev = Device(device_cfg, ctx.gateway, ctx.mqtt_client)
         dev.setup()
+        updated_count = len(_load().get("devices", []))
+        ctx.mqtt_client.update_device_count(updated_count)
 
     ctx.wizard = None
     return web.json_response({"state": "CONFIRMED", "device": cfg})
