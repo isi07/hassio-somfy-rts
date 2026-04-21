@@ -34,11 +34,8 @@ logger = logging.getLogger(__name__)
 
 _PROFILES_PATH = os.path.join(os.path.dirname(__file__), "device_profiles.json")
 
-# MY_UP / MY_DOWN werden als "MY" im last_command-Sensor angezeigt
-_COMMAND_DISPLAY: Dict[str, str] = {
-    "MY_UP": "MY",
-    "MY_DOWN": "MY",
-}
+# Befehlsnamen-Übersetzung für last_command-Sensor (leer = kein Mapping, Originalname verwenden)
+_COMMAND_DISPLAY: Dict[str, str] = {}
 
 # Notfall-Fallback wenn device_profiles.json komplett fehlt oder unlesbar ist.
 # Spiegelt das shutter-Profil mit korrekten Schicht-2-Begriffen wider.
@@ -215,13 +212,15 @@ class Device:
             return  # Fehler bereits geloggt in _send_rts()
 
         if self._device.mode == "A":
-            # ha_platform bestimmt, welchen Zustand HA erwartet:
-            # light/switch: "ON"/"OFF" — cover: "open"/"closed"/"stopped"
-            if self.ha_platform in ("light", "switch"):
-                self._state = "ON" if command == "OPEN" else "OFF"
-            else:
-                self._state = _command_to_state(command)
-            self._mqtt.publish_state(self._device, self._state)
+            # MY_UP / MY_DOWN sind Tilt-Befehle (Lamellensteuerung) — Cover-State nicht verändern
+            if rts_action not in ("MY_UP", "MY_DOWN"):
+                # ha_platform bestimmt, welchen Zustand HA erwartet:
+                # light/switch: "ON"/"OFF" — cover: "open"/"closed"/"stopped"
+                if self.ha_platform in ("light", "switch"):
+                    self._state = "ON" if command == "OPEN" else "OFF"
+                else:
+                    self._state = _command_to_state(command)
+                self._mqtt.publish_state(self._device, self._state)
             self._publish_diagnostics(last_command=rts_action, raw_frame=seq.frame)
         elif self._device.mode == "B":
             self._publish_diagnostics(last_command=rts_action, raw_frame=seq.frame)
@@ -275,11 +274,14 @@ class Device:
 
 
 def _command_to_state(command: str) -> str:
+    """Übersetzt HA-Semantik-Befehl in MQTT Cover-Zustandsstring.
+
+    MY_UP / MY_DOWN sind Tilt-Befehle und verändern den Cover-State nicht —
+    daher nicht in dieser Tabelle; der Aufrufer prüft das vorher.
+    """
     return {
-        "OPEN":    "open",
-        "CLOSE":   "closed",
-        "STOP":    "stopped",
-        "PROG":    "stopped",
-        "MY_UP":   "open",
-        "MY_DOWN": "closed",
+        "OPEN":  "open",
+        "CLOSE": "closed",
+        "STOP":  "stopped",
+        "PROG":  "stopped",
     }.get(command, "stopped")

@@ -259,3 +259,70 @@ class TestProgLongAndProgPairCommands:
         dev._handle_command("prog_long")
         sent = [c.args[0] for c in gw.send_raw.call_args_list]
         assert sent[0] == "Yr14"
+
+
+class TestTiltCommands:
+    """MY_UP / MY_DOWN — Jalousie Lamellensteuerung (blind, has_tilt=true)."""
+
+    def test_my_up_mode_a_sends_rts_my_up(self, tmp_codes_path):
+        """Mode A: MY_UP → RTS MY_UP (ctrl 0x3 → Byte1=0x30)."""
+        dev, gw, _ = _make_device("blind", mode="A")
+        dev._handle_command("MY_UP")
+        sent = [c.args[0] for c in gw.send_raw.call_args_list]
+        assert sent[0] == "Yr1"
+        assert sent[1][4:6] == "30", f"Expected MY_UP (0x30), got {sent[1][4:6]!r}"
+
+    def test_my_down_mode_a_sends_rts_my_down(self, tmp_codes_path):
+        """Mode A: MY_DOWN → RTS MY_DOWN (ctrl 0x5 → Byte1=0x50)."""
+        dev, gw, _ = _make_device("blind", mode="A")
+        dev._handle_command("MY_DOWN")
+        sent = [c.args[0] for c in gw.send_raw.call_args_list]
+        assert sent[0] == "Yr1"
+        assert sent[1][4:6] == "50", f"Expected MY_DOWN (0x50), got {sent[1][4:6]!r}"
+
+    def test_my_up_mode_a_does_not_publish_cover_state(self, tmp_codes_path):
+        """MY_UP ist ein Tilt-Befehl — der Cover-State darf nicht verändert werden."""
+        dev, _, mqtt = _make_device("blind", mode="A")
+        dev._handle_command("MY_UP")
+        mqtt.publish_state.assert_not_called()
+
+    def test_my_down_mode_a_does_not_publish_cover_state(self, tmp_codes_path):
+        """MY_DOWN ist ein Tilt-Befehl — der Cover-State darf nicht verändert werden."""
+        dev, _, mqtt = _make_device("blind", mode="A")
+        dev._handle_command("MY_DOWN")
+        mqtt.publish_state.assert_not_called()
+
+    def test_my_up_mode_a_publishes_last_command_my_up(self, tmp_codes_path):
+        """MY_UP: last_command-Sensor muss 'MY_UP' anzeigen, nicht 'MY'."""
+        dev, _, mqtt = _make_device("blind", mode="A")
+        dev._handle_command("MY_UP")
+        diag_calls = {c.args[1]: c.args[2] for c in mqtt.publish_diagnostic.call_args_list}
+        assert diag_calls.get("last_command") == "MY_UP"
+
+    def test_my_down_mode_a_publishes_last_command_my_down(self, tmp_codes_path):
+        """MY_DOWN: last_command-Sensor muss 'MY_DOWN' anzeigen, nicht 'MY'."""
+        dev, _, mqtt = _make_device("blind", mode="A")
+        dev._handle_command("MY_DOWN")
+        diag_calls = {c.args[1]: c.args[2] for c in mqtt.publish_diagnostic.call_args_list}
+        assert diag_calls.get("last_command") == "MY_DOWN"
+
+    def test_my_up_mode_b_sends_rts_my_up(self, tmp_codes_path):
+        """Mode B: MY_UP direkt (Schicht 2) → Byte1=0x30."""
+        dev, gw, _ = _make_device("blind", mode="B")
+        dev._handle_command("MY_UP")
+        sent = [c.args[0] for c in gw.send_raw.call_args_list]
+        assert sent[1][4:6] == "30"
+
+    def test_my_up_mode_b_publishes_last_command_my_up(self, tmp_codes_path):
+        """Mode B: last_command zeigt 'MY_UP', nicht 'MY'."""
+        dev, _, mqtt = _make_device("blind", mode="B")
+        dev._handle_command("MY_UP")
+        diag_calls = {c.args[1]: c.args[2] for c in mqtt.publish_diagnostic.call_args_list}
+        assert diag_calls.get("last_command") == "MY_UP"
+
+    def test_my_down_mode_b_publishes_last_command_my_down(self, tmp_codes_path):
+        """Mode B: last_command zeigt 'MY_DOWN', nicht 'MY'."""
+        dev, _, mqtt = _make_device("blind", mode="B")
+        dev._handle_command("MY_DOWN")
+        diag_calls = {c.args[1]: c.args[2] for c in mqtt.publish_diagnostic.call_args_list}
+        assert diag_calls.get("last_command") == "MY_DOWN"

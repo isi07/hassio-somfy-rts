@@ -65,13 +65,15 @@ def _device_ha_platform(device_type: str) -> Optional[str]:
 
 
 def _api_command_to_state(command: str) -> str:
-    """Übersetzt HA-Semantik-Befehl in MQTT Cover-Zustandsstring für Modus-A-State-Publishing."""
+    """Übersetzt HA-Semantik-Befehl in MQTT Cover-Zustandsstring für Modus-A-State-Publishing.
+
+    MY_UP / MY_DOWN sind Tilt-Befehle — nicht hier, Aufrufer prüft vorher.
+    """
     return {
-        "OPEN":    "open",
-        "CLOSE":   "closed",
-        "STOP":    "stopped",
-        "MY_UP":   "open",
-        "MY_DOWN": "closed",
+        "OPEN":  "open",
+        "CLOSE": "closed",
+        "STOP":  "stopped",
+        "PROG":  "stopped",
     }.get(command, "stopped")
 
 # ---------- AppContext ----------
@@ -297,11 +299,10 @@ async def send_command(request: web.Request) -> web.Response:
         )
         rc = get_current(addr)
         ctx.mqtt_client.publish_diagnostic(device_cfg_mqtt, "rolling_code", str(rc))
-        display_cmd = {"MY_UP": "MY", "MY_DOWN": "MY"}.get(rts_action, rts_action)
-        ctx.mqtt_client.publish_diagnostic(device_cfg_mqtt, "last_command", display_cmd)
+        ctx.mqtt_client.publish_diagnostic(device_cfg_mqtt, "last_command", rts_action)
         ctx.mqtt_client.publish_json_attributes(device_cfg_mqtt, "last_command", {"raw_frame": seq.frame})
-        # State nur in Modus A, nicht für PROG-Befehle
-        if device_mode == "A" and action != "PROG":
+        # State nur in Modus A, nicht für PROG und nicht für MY_UP/MY_DOWN (Tilt-Befehle)
+        if device_mode == "A" and action not in ("PROG", "MY_UP", "MY_DOWN"):
             ha_platform = _device_ha_platform(device_type)
             if ha_platform in ("light", "switch"):
                 state_val = "ON" if action == "OPEN" else "OFF"
