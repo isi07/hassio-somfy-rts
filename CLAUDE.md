@@ -299,6 +299,22 @@ BaseGateway (ABC)          # gateway.py
 - Beide greifen auf `somfy_codes.json` und die serielle Schnittstelle zu →
   `store_lock()` und `rts.TX_LOCK` (siehe Kritische Invarianten)
 
+### Startreihenfolge und Watchdog
+
+1. Config, Logging, `somfy_codes.json` laden
+2. **Web-UI starten** (`start_server`) — vor allem anderen
+3. `connect_gateway()` — NanoCUL mit Retry (10 s) bis verbunden oder Shutdown
+4. `mqtt_client.connect()` + `wait_for_mqtt()`
+5. Gateway- und Geräte-Discovery, dann auf Shutdown warten
+6. `finally`: offline melden, MQTT/Gateway trennen, `runner.cleanup()` — auch bei Shutdown
+   während Schritt 3/4
+
+Grund für 2 vor 3/4: `config.yaml` → `watchdog: http://[HOST]:[PORT:8099]/api/status`.
+Der Supervisor prüft alle 120 s über die **Container-IP** (funktioniert mit geschlossenem
+Host-Port) und startet nach 2 Fehlversuchen neu, wenn der Watchdog-Schalter an ist
+(Standard: aus). Würde die Web-UI erst nach Stick/Broker starten, käme es bei längerem
+Warten zu Neustart-Schleifen. `/api/status` muss daher billig bleiben und darf nie blockieren.
+
 ### MQTT-Verbindung
 
 - `MQTTClient.connect()` startet nur im Hintergrund (`connect_async` + `loop_start`),

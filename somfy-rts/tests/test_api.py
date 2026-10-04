@@ -961,3 +961,15 @@ async def test_invalid_json_raw_cmd_returns_400(aiohttp_client, tmp_codes_path):
     client = await aiohttp_client(create_app(ctx))
     resp = await client.post("/api/devices/A00001/raw-cmd", data=b"{broken")
     assert resp.status == 400
+
+
+async def test_status_reports_mqtt_connection(aiohttp_client, tmp_codes_path):
+    """/api/status (also used by the HA watchdog) includes the MQTT state."""
+    gw = SimGateway()
+    gw.connect()
+    mqtt = type("M", (), {"is_connected": True})()
+    client = await aiohttp_client(create_app(AppContext(gateway=gw, config=Config(),
+                                                        mqtt_client=mqtt)))
+    resp = await client.get("/api/status")
+    assert resp.status == 200
+    assert (await resp.json())["mqtt_connected"] is True

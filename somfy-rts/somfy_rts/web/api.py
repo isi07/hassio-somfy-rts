@@ -122,7 +122,11 @@ async def get_debug_config(request: web.Request) -> web.Response:
 
 @routes.get("/api/status")
 async def get_status(request: web.Request) -> web.Response:
-    """Return gateway connection and simulation status."""
+    """Return gateway, MQTT and simulation status.
+
+    Also the HA Supervisor watchdog URL (config.yaml) — must stay cheap and must
+    answer while the app still waits for the NanoCUL or the MQTT broker.
+    """
     ctx: AppContext = request.app["ctx"]
     return web.json_response(
         {
@@ -130,6 +134,7 @@ async def get_status(request: web.Request) -> web.Response:
             "simulation": isinstance(ctx.gateway, SimGateway),
             "port": ctx.gateway.port_name,
             "version": __version__,
+            "mqtt_connected": bool(ctx.mqtt_client and ctx.mqtt_client.is_connected),
         }
     )
 

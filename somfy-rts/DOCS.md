@@ -26,6 +26,12 @@
 
 5. App starten
 
+6. **Empfohlen:** In der App-Info den Schalter **Watchdog** einschalten. Home Assistant
+   startet die App dann automatisch neu, wenn sie abstürzt oder nicht mehr reagiert
+   (Prüfung alle 2 Minuten über `/api/status`, Neustart nach zwei Fehlversuchen — auch bei
+   geschlossenem Port 8099). Während die App auf den NanoCUL oder den MQTT-Broker wartet,
+   meldet sie sich trotzdem als „lebendig“ und wird **nicht** unnötig neu gestartet.
+
 ---
 
 ## Konfiguration
