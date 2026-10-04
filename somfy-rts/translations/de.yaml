@@ -13,6 +13,16 @@ configuration:
   mqtt_password:
     name: MQTT-Passwort
     description: Passwort für den MQTT-Broker.
+  mqtt_tls:
+    name: MQTT über TLS
+    description: >-
+      Verbindung zum Broker verschlüsseln (TLS). Der Port ist dann meist 8883.
+  mqtt_tls_verify:
+    name: TLS-Zertifikat prüfen
+    description: >-
+      Zertifikat des Brokers prüfen (empfohlen, z. B. bei Let's Encrypt).
+      Ausschalten nur zum Testen — dann ist die Verbindung nicht vor einem
+      gefälschten Broker geschützt.
   usb_port:
     name: USB-Port des NanoCUL
     description: >-

@@ -502,3 +502,80 @@ class TestRepublish:
         client._on_connect(mock_paho, None, MagicMock(), _reason("CONNACK", 0), None)
         subscribed = {c.args[0] for c in mock_paho.subscribe.call_args_list}
         assert "homeassistant/status" in subscribed
+
+
+# ---------- TLS ----------
+
+
+def _client_with(**cfg_kwargs):
+    from somfy_rts.config import Config
+
+    with patch("paho.mqtt.client.Client") as mock_cls:
+        mock_paho = MagicMock()
+        mock_cls.return_value = mock_paho
+        client = MQTTClient(Config(**cfg_kwargs))
+    return client, mock_paho
+
+
+class TestTls:
+    def test_tls_off_by_default(self):
+        _, mock_paho = _client_with()
+        mock_paho.tls_set.assert_not_called()
+
+    def test_tls_with_verification(self):
+        import ssl
+
+        _, mock_paho = _client_with(mqtt_tls=True, mqtt_port=8883)
+        mock_paho.tls_set.assert_called_once_with(cert_reqs=ssl.CERT_REQUIRED)
+        mock_paho.tls_insecure_set.assert_not_called()
+
+    def test_tls_without_verification_warns(self, caplog):
+        import ssl
+
+        _, mock_paho = _client_with(mqtt_tls=True, mqtt_tls_verify=False, mqtt_port=8883)
+        mock_paho.tls_set.assert_called_once_with(cert_reqs=ssl.CERT_NONE)
+        mock_paho.tls_insecure_set.assert_called_once_with(True)
+        assert "Zertifikatsprüfung ist DEAKTIVIERT" in caplog.text
+
+    def test_tls_on_port_1883_warns(self, caplog):
+        _client_with(mqtt_tls=True, mqtt_port=1883)
+        assert "Port 1883" in caplog.text
+
+
+class TestConnectFailReason:
+    @pytest.mark.parametrize(
+        ("exc", "expected"),
+        [
+            (ConnectionRefusedError(111, "refused"), "Verbindung abgelehnt"),
+            (TimeoutError("timed out"), "Zeitüberschreitung"),
+        ],
+    )
+    def test_reason_from_active_exception(self, mqtt_client_with_mock, caplog, exc, expected):
+        client, mock_paho = mqtt_client_with_mock
+        try:
+            raise exc
+        except OSError:
+            client._on_connect_fail(mock_paho, None)  # paho calls it inside its except
+        assert expected in caplog.text
+
+    def test_dns_error(self, mqtt_client_with_mock, caplog):
+        import socket
+
+        client, mock_paho = mqtt_client_with_mock
+        try:
+            raise socket.gaierror(-2, "Name or service not known")
+        except OSError:
+            client._on_connect_fail(mock_paho, None)
+        assert "Hostname nicht auflösbar" in caplog.text
+
+    def test_certificate_error(self, mqtt_client_with_mock, caplog):
+        import ssl
+
+        client, mock_paho = mqtt_client_with_mock
+        err = ssl.SSLCertVerificationError(1, "certificate verify failed")
+        err.verify_message = "Hostname mismatch, certificate is not valid for 'x'"
+        try:
+            raise err
+        except OSError:
+            client._on_connect_fail(mock_paho, None)
+        assert "TLS-Zertifikat ungültig: Hostname mismatch" in caplog.text

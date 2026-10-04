@@ -126,7 +126,12 @@ jobs:
           CHECK: >-
             import platform, sys, aiohttp, paho.mqtt, serial, somfy_rts.main;
             print(platform.machine(), sys.executable, sys.version);
-            print("aiohttp", aiohttp.__version__)
+            print("aiohttp", aiohttp.__version__);
+            import socket, ssl;
+            host = "valid-isrgrootx1.letsencrypt.org";
+            tls = ssl.create_default_context().wrap_socket(
+            socket.create_connection((host, 443), timeout=10), server_hostname=host);
+            print("Let's Encrypt chain verified:", tls.version())
         run: |
           docker run --rm --platform "$PLATFORM" --entrypoint python3 "$IMAGE" -c "$CHECK"
           docker inspect --format '{{ json .Config.Labels }}' "$IMAGE"

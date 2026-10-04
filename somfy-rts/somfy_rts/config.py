@@ -41,6 +41,8 @@ class Config:
     mqtt_port: int = 1883
     mqtt_user: str = ""
     mqtt_password: str = ""
+    mqtt_tls: bool = False         # encrypt the broker connection (usually port 8883)
+    mqtt_tls_verify: bool = True   # verify the broker certificate (system CA store)
     log_level: str = "INFO"
     address_prefix: str = "A000"  # single source of truth — passed to PairingWizard
     log_format: str = "text"       # "text" | "json"
@@ -59,6 +61,8 @@ def load_config() -> Config:
         mqtt_port=int(os.environ.get("SOMFY_MQTT_PORT", "1883")),
         mqtt_user=os.environ.get("SOMFY_MQTT_USER", ""),
         mqtt_password=os.environ.get("SOMFY_MQTT_PASSWORD", ""),
+        mqtt_tls=os.environ.get("SOMFY_MQTT_TLS", "false").lower() == "true",
+        mqtt_tls_verify=os.environ.get("SOMFY_MQTT_TLS_VERIFY", "true").lower() != "false",
         log_level=os.environ.get("SOMFY_LOG_LEVEL", "info").upper(),
         address_prefix=os.environ.get("SOMFY_ADDRESS_PREFIX", "A000").upper(),
         log_format=os.environ.get("SOMFY_LOG_FORMAT", "text").lower(),

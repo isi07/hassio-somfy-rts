@@ -326,6 +326,11 @@ Warten zu Neustart-Schleifen. `/api/status` muss daher billig bleiben und darf n
   Abbruch), `_on_connect` (ERROR bei abgelehnter Anmeldung, INFO mit Ausfalldauer und
   Fehlversuchen nach Wiederverbindung)
 - Nach einem Reconnect werden alle Command-Topics neu abonniert und `online` publiziert
+- **TLS** (`mqtt_tls`): `tls_set()` mit System-CA-Store, keine eigene CA, keine
+  Client-Zertifikate. Fehlerursache: paho ruft `on_connect_fail` innerhalb seines
+  `except OSError` auf — `sys.exception()` liefert dort die Ursache, `_describe_connect_error()`
+  macht daraus den Log-Text (Zertifikat, TLS, abgelehnt, DNS, Timeout). CI-Smoke-Test
+  prüft im Image einen echten TLS-Handshake gegen eine Let's-Encrypt-Testseite
 - **Retained-Cache:** Jede retained Nachricht (Discovery, State, Diagnose, Gateway-Werte —
   nicht das LWT) läuft über `_publish_retained()`, das den letzten Payload je Topic merkt
   (leerer Payload = Topic gelöscht und vergessen). `republish_retained()` sendet alles erneut:
@@ -414,6 +419,8 @@ Das LWT-Topic `cul2mqtt/status` wird bei Verbindungsabbruch automatisch auf `"of
 | `mqtt_port` | int | 1883 | MQTT Port |
 | `mqtt_user` | string | `""` | MQTT Benutzer |
 | `mqtt_password` | password | `""` | MQTT Passwort |
+| `mqtt_tls` | bool | `false` | TLS zum Broker (System-CA-Store, z. B. Let's Encrypt) |
+| `mqtt_tls_verify` | bool | `true` | Server-Zertifikat prüfen (`false` = `CERT_NONE` + `tls_insecure_set`) |
 | `address_prefix` | string | `A000` | Präfix für neue Adressen (4 Hex-Zeichen) |
 | `log_level` | enum | `info` | debug/info/warning/error |
 | `log_format` | enum | `text` | text/json (Frame-Log) |
@@ -424,7 +431,8 @@ Das LWT-Topic `cul2mqtt/status` wird bei Verbindungsabbruch automatisch auf `"of
 
 Neue Option = `config.yaml` (options + schema) + `run.sh` (export `SOMFY_*`) + `config.py`
 + `translations/de.yaml` + `translations/en.yaml` + DOCS.md — alle anpassen
-(`tests/test_translations.py` schlägt fehl, wenn eine Übersetzung fehlt).
+(`tests/test_translations.py` schlägt fehl, wenn eine Übersetzung fehlt;
+`tests/test_config.py` prüft die Kette `config.yaml` → `run.sh` → `SOMFY_*` → `config.py`).
 
 Geräte werden **nicht** in `config.yaml` verwaltet, sondern in `/data/somfy_codes.json`
 (automatisch durch den Anlern-Wizard oder ioBroker-Import erstellt).

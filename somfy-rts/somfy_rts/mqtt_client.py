@@ -29,6 +29,9 @@ Origin-Block in allen Discovery-Payloads.
 
 import json
 import logging
+import socket
+import ssl
+import sys
 import threading
 import time
 from collections.abc import Callable
@@ -50,6 +53,7 @@ GW_TOPIC_BASE = "cul2mqtt/gateway"
 RECONNECT_MIN_DELAY_S = 1
 RECONNECT_MAX_DELAY_S = 60
 MQTT_KEEPALIVE_S = 60
+MQTT_PLAIN_PORT = 1883
 # Home Assistant announces its (re)start here ("online"); we then resend discovery
 HA_STATUS_TOPIC = f"{HA_DISCOVERY}/status"
 MQTT_TOPIC_PREFIX = "somfy"
@@ -95,6 +99,8 @@ class MQTTClient:
 
         if config.mqtt_user:
             self._client.username_pw_set(config.mqtt_user, config.mqtt_password)
+        if config.mqtt_tls:
+            self._setup_tls(config)
 
         # LWT: wird automatisch bei ungeplanter Trennung veröffentlicht
         self._client.will_set(LWT_TOPIC, "offline", retain=True)
@@ -105,6 +111,28 @@ class MQTTClient:
         self._client.on_connect_fail = self._on_connect_fail
 
     # ---------- Verbindung ----------
+
+    def _setup_tls(self, config: Config) -> None:
+        """Enable TLS with the system CA store (e.g. Let's Encrypt), optionally unverified.
+
+        Args:
+            config: App configuration (mqtt_tls_verify, mqtt_port).
+        """
+        if config.mqtt_tls_verify:
+            self._client.tls_set(cert_reqs=ssl.CERT_REQUIRED)
+            logger.info("MQTT: TLS aktiviert, Zertifikatsprüfung an.")
+        else:
+            self._client.tls_set(cert_reqs=ssl.CERT_NONE)
+            self._client.tls_insecure_set(True)
+            logger.warning(
+                "MQTT: TLS aktiviert, aber die Zertifikatsprüfung ist DEAKTIVIERT — "
+                "die Verbindung ist nicht vor einem gefälschten Broker geschützt."
+            )
+        if config.mqtt_port == MQTT_PLAIN_PORT:
+            logger.warning(
+                "MQTT: TLS ist aktiv, aber mqtt_port ist Port 1883 (üblich ohne TLS). "
+                "TLS-Port des Brokers ist meist 8883."
+            )
 
     @property
     def broker(self) -> str:
@@ -699,10 +727,12 @@ class MQTTClient:
         self._failed_attempts += 1
         if self._outage_started is None:
             self._outage_started = time.monotonic()
+        # paho calls this callback inside its "except OSError" — the cause is active
+        reason = _describe_connect_error(sys.exception())
         logger.warning(
-            "MQTT-Broker %s nicht erreichbar (Versuch %d) — neuer Versuch in "
+            "MQTT-Broker %s nicht erreichbar (Versuch %d): %s — neuer Versuch in "
             "spätestens %d s.",
-            self.broker, self._failed_attempts, RECONNECT_MAX_DELAY_S,
+            self.broker, self._failed_attempts, reason, RECONNECT_MAX_DELAY_S,
         )
 
     def _on_message(self, client: mqtt.Client, userdata: object, msg: mqtt.MQTTMessage) -> None:
@@ -722,6 +752,30 @@ class MQTTClient:
 
 
 # ---------- Hilfsfunktionen ----------
+
+def _describe_connect_error(exc: BaseException | None) -> str:
+    """Turn a connect exception into a short German log text.
+
+    Args:
+        exc: Exception that made the connection attempt fail (None if unknown).
+
+    Returns:
+        Human-readable reason for the app log.
+    """
+    if isinstance(exc, ssl.SSLCertVerificationError):
+        return f"TLS-Zertifikat ungültig: {exc.verify_message or exc}"
+    if isinstance(exc, ssl.SSLError):
+        return f"TLS-Fehler: {exc.reason or exc} (TLS-Einstellung und Port prüfen)"
+    if isinstance(exc, ConnectionRefusedError):
+        return "Verbindung abgelehnt (Broker aus oder falscher Port?)"
+    if isinstance(exc, socket.gaierror):
+        return "Hostname nicht auflösbar"
+    if isinstance(exc, TimeoutError):
+        return "Zeitüberschreitung"
+    if exc is None:
+        return "unbekannter Grund"
+    return f"{type(exc).__name__}: {exc}"
+
 
 def _avail_block() -> dict:
     return {

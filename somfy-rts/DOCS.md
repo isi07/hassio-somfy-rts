@@ -46,6 +46,8 @@ Alle Optionen werden unter **Konfiguration** in der App eingestellt:
 | `mqtt_port` | `1883` | MQTT Broker Port |
 | `mqtt_user` | `""` | MQTT Benutzername (leer = keine Auth) |
 | `mqtt_password` | `""` | MQTT Passwort |
+| `mqtt_tls` | `false` | Verbindung zum Broker mit TLS verschlüsseln (Port meist `8883`) |
+| `mqtt_tls_verify` | `true` | Zertifikat des Brokers prüfen (nur zum Testen ausschalten) |
 | `address_prefix` | `A000` | 4-stelliger Hex-Präfix für neue Geräteadressen |
 | `log_level` | `info` | Log-Level: `debug` / `info` / `warning` / `error` |
 | `log_format` | `text` | Format des RTS-Frame-Logs: `text` / `json` |
@@ -407,6 +409,36 @@ Kann der neue Rolling Code nicht gespeichert werden (z. B. Speicher voll), wird
 - App-Log: Steht bei jedem Befehl `CUL TX: Yr1` und `CUL TX: YsA0…`? Dann wurde gesendet
 - Entfernung zum Motor prüfen (~30 m Freifeld; Betonwände reduzieren Reichweite stark)
 - App-Log auf `PROG_SENT` und `CONFIRMED` prüfen (`log_level: debug` aktivieren)
+
+### MQTT über TLS (externer Broker)
+
+Für einen Broker mit öffentlichem Zertifikat (z. B. **Let's Encrypt**):
+
+```yaml
+mqtt_host: mqtt.example.org   # muss zum Namen im Zertifikat passen
+mqtt_port: 8883
+mqtt_tls: true
+mqtt_tls_verify: true
+mqtt_user: somfy
+mqtt_password: "…"
+```
+
+- Das Zertifikat wird gegen die Zertifizierungsstellen des Systems geprüft — für
+  Let's Encrypt ist keine eigene CA-Datei nötig. Eigene CA-Dateien und Client-Zertifikate
+  werden derzeit nicht unterstützt (Anmeldung per Benutzername/Passwort).
+- `mqtt_tls_verify: false` schaltet die Prüfung ab (Warnung im Log). Die Verbindung ist
+  dann zwar verschlüsselt, aber nicht vor einem gefälschten Broker geschützt.
+- **Empfehlung:** Für die App einen eigenen Broker-Benutzer anlegen, der nur
+  `homeassistant/#`, `somfy/#` und `cul2mqtt/#` nutzen darf.
+
+Typische Log-Meldungen bei TLS-Problemen:
+
+| Meldung | Ursache |
+|---|---|
+| `TLS-Zertifikat ungültig: Hostname mismatch …` | `mqtt_host` passt nicht zum Namen im Zertifikat |
+| `TLS-Zertifikat ungültig: certificate has expired` | Zertifikat des Brokers abgelaufen |
+| `TLS-Zertifikat ungültig: self-signed certificate` / `unable to get local issuer certificate` | kein öffentliches Zertifikat (eigene CA) |
+| `TLS-Fehler: … (TLS-Einstellung und Port prüfen)` | TLS an, aber Port ohne TLS (z. B. 1883) — oder umgekehrt |
 
 ### MQTT Verbindung schlägt fehl
 
