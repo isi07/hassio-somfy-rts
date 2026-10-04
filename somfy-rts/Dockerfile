@@ -31,6 +31,13 @@ LABEL \
 # Create persistent data directory (pip ships with the base-python image)
 RUN mkdir -p /data
 
+# Health check inside the container (independent of the host port mapping).
+# The Supervisor restarts the app on "unhealthy" when the Watchdog switch is on
+# (replaces the obsolete config.yaml "watchdog" key). The web UI starts first,
+# so the app stays healthy while it waits for the NanoCUL or the MQTT broker.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8099/api/status', timeout=5)" || exit 1
+
 # Set working directory
 WORKDIR /app
 

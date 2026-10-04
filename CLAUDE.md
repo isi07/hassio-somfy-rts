@@ -309,11 +309,13 @@ BaseGateway (ABC)          # gateway.py
 6. `finally`: offline melden, MQTT/Gateway trennen, `runner.cleanup()` — auch bei Shutdown
    während Schritt 3/4
 
-Grund für 2 vor 3/4: `config.yaml` → `watchdog: http://[HOST]:[PORT:8099]/api/status`.
-Der Supervisor prüft alle 120 s über die **Container-IP** (funktioniert mit geschlossenem
-Host-Port) und startet nach 2 Fehlversuchen neu, wenn der Watchdog-Schalter an ist
-(Standard: aus). Würde die Web-UI erst nach Stick/Broker starten, käme es bei längerem
-Warten zu Neustart-Schleifen. `/api/status` muss daher billig bleiben und darf nie blockieren.
+Grund für 2 vor 3/4: Docker-`HEALTHCHECK` im Dockerfile (alle 30 s
+`http://127.0.0.1:8099/api/status` **im Container**, 3 Fehlschläge → `unhealthy`). Der
+Supervisor startet bei `health_status: unhealthy` neu, wenn der Watchdog-Schalter an ist
+(Standard: aus). Der `config.yaml`-Key `watchdog` ist **veraltet** (Add-on-Linter-Fehler) —
+nicht verwenden. Würde die Web-UI erst nach Stick/Broker starten, wäre die App beim Warten
+`unhealthy` → Neustart-Schleifen. `/api/status` muss daher billig bleiben und darf nie
+blockieren. CI startet den Container ohne Stick/Broker und erwartet `healthy`.
 
 ### MQTT-Verbindung
 

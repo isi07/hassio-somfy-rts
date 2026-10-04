@@ -93,7 +93,7 @@ def main() -> None:
 async def _async_main(shutdown_event: asyncio.Event | None = None) -> None:
     """Async main loop: Web UI, gateway, MQTT, graceful shutdown.
 
-    The Web UI starts first so that Ingress and the HA watchdog (GET /api/status)
+    The Web UI starts first so that Ingress and the Docker HEALTHCHECK (GET /api/status)
     get an answer while the app is still waiting for the NanoCUL or the broker.
 
     Args:
@@ -149,7 +149,7 @@ async def _async_main(shutdown_event: asyncio.Event | None = None) -> None:
             except (NotImplementedError, OSError):
                 pass  # Windows: handled via KeyboardInterrupt
 
-    # Web UI first — Ingress and the HA watchdog must answer while waiting below
+    # Web UI first — Ingress and the HEALTHCHECK must answer while waiting below
     ctx = AppContext(gateway=gateway, config=config, mqtt_client=mqtt_client)
     ctx.attach_log_handler()
     runner = await start_server(WEB_HOST, WEB_PORT, ctx)

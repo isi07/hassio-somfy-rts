@@ -124,7 +124,7 @@ async def get_debug_config(request: web.Request) -> web.Response:
 async def get_status(request: web.Request) -> web.Response:
     """Return gateway, MQTT and simulation status.
 
-    Also the HA Supervisor watchdog URL (config.yaml) — must stay cheap and must
+    Also the target of the Docker HEALTHCHECK (Dockerfile) — must stay cheap and must
     answer while the app still waits for the NanoCUL or the MQTT broker.
     """
     ctx: AppContext = request.app["ctx"]

@@ -22,9 +22,6 @@ ports:
   8099/tcp: null
 
 ingress: true
-# Supervisor checks this every 120 s via the container address (works with the
-# host port closed); restarts the app after 2 misses if the Watchdog switch is on.
-watchdog: "http://[HOST]:[PORT:8099]/api/status"
 panel_icon: mdi:blinds
 
 options:

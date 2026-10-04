@@ -39,3 +39,16 @@ def test_every_option_reaches_config_py(key: str):
     assert f"_opt {key} " in run_sh, f"run.sh does not read {key}"
     assert f"export {env}=" in run_sh, f"run.sh does not export {env}"
     assert f'"{env}"' in config_py, f"config.py does not read {env}"
+
+
+def test_health_monitoring_uses_docker_healthcheck():
+    """HA's 'watchdog' key is obsolete (add-on linter) — Docker HEALTHCHECK is used.
+
+    The Supervisor restarts the app on health_status=unhealthy when the Watchdog
+    switch is on; the check must hit the cheap /api/status endpoint.
+    """
+    config = yaml.safe_load((ADDON_DIR / "config.yaml").read_text(encoding="utf-8"))
+    dockerfile = (ADDON_DIR / "Dockerfile").read_text(encoding="utf-8")
+    assert "watchdog" not in config
+    assert "HEALTHCHECK" in dockerfile
+    assert "127.0.0.1:8099/api/status" in dockerfile

@@ -136,6 +136,25 @@ jobs:
           docker run --rm --platform "$PLATFORM" --entrypoint python3 "$IMAGE" -c "$CHECK"
           docker inspect --format '{{ json .Config.Labels }}' "$IMAGE"
 
+      - name: Smoke test container health (HEALTHCHECK, no stick, no broker)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          IMAGE: ghcr.io/isi07/somfy-rts:${{ steps.version.outputs.version }}-${{ matrix.arch }}
+          PLATFORM: linux/${{ matrix.arch }}
+        run: |
+          cid=$(docker run -d --platform "$PLATFORM" \
+            --health-interval=3s --health-start-period=5s "$IMAGE")
+          status=starting
+          for _ in $(seq 1 40); do
+            status=$(docker inspect --format '{{ .State.Health.Status }}' "$cid")
+            echo "health: $status"
+            if [ "$status" = healthy ]; then break; fi
+            sleep 3
+          done
+          docker logs "$cid" 2>&1 | tail -15
+          docker rm -f "$cid" > /dev/null
+          [ "$status" = healthy ]
+
   manifest:
     name: Create multi-arch manifest
     needs: build
