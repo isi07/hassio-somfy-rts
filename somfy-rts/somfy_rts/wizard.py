@@ -21,8 +21,8 @@ import logging
 import time
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Optional
 
+from . import rts as rts_module
 from .gateway import BaseGateway, GatewayError
 from .rolling_code import (
     RollingCodeStoreError,
@@ -31,7 +31,6 @@ from .rolling_code import (
     _save_atomic,
     store_lock,
 )
-from . import rts as rts_module
 from .rts import log_rts_frame
 
 logger = logging.getLogger(__name__)
@@ -56,7 +55,7 @@ class WizardSession:
     device_type: str = "shutter"
     mode: str = "A"
     state: WizardState = WizardState.IDLE
-    prog_sent_at: Optional[float] = None
+    prog_sent_at: float | None = None
     error: str = ""
 
 

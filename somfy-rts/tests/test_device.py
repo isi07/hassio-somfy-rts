@@ -6,12 +6,13 @@ Layer-2 (RTS protocol):   UP,   DOWN,  MY    — received by Mode B _handle_comm
 resolve_rts_action() translates Layer 1 → Layer 2 per device_profiles.json command_map.
 """
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 
 @pytest.fixture(autouse=True)
-def isolated_codes(tmp_codes_path):  # noqa: PT004 — side-effect fixture
+def isolated_codes(tmp_codes_path):
     """Every test gets an isolated somfy_codes.json."""
 
 

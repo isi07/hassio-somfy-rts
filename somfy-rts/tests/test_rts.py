@@ -8,11 +8,12 @@ via resolve_rts_action() in device.py before reaching this module.
 """
 
 import re
+
 import pytest
 
 
 @pytest.fixture(autouse=True)
-def isolated_codes(tmp_codes_path):  # noqa: PT004 — side-effect fixture
+def isolated_codes(tmp_codes_path):
     """Every test in this module gets an isolated somfy_codes.json."""
 
 

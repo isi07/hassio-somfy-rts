@@ -1,13 +1,12 @@
 """Tests for the REST API (web/api.py) using aiohttp test client."""
 
 import json
-import pytest
 
+import pytest
 from somfy_rts.config import Config
 from somfy_rts.gateway import SimGateway
 from somfy_rts.web.api import AppContext
 from somfy_rts.web.server import create_app
-
 
 # ---------- Fixtures ----------
 
@@ -245,6 +244,7 @@ async def test_delete_device_not_found(client):
 async def test_delete_device_calls_unregister(aiohttp_client, tmp_codes_path):
     """DELETE must call mqtt_client.unregister_device() when an MQTT client is set."""
     from unittest.mock import MagicMock
+
     import somfy_rts.rolling_code as rc
     from somfy_rts.config import Config
     from somfy_rts.gateway import SimGateway
@@ -283,6 +283,7 @@ async def test_delete_device_calls_unregister(aiohttp_client, tmp_codes_path):
 async def test_delete_device_unregister_uses_correct_mode(aiohttp_client, tmp_codes_path):
     """unregister_device() must receive the DeviceConfig with the correct mode."""
     from unittest.mock import MagicMock
+
     import somfy_rts.rolling_code as rc
     from somfy_rts.config import Config, DeviceConfig
     from somfy_rts.gateway import SimGateway
@@ -967,3 +968,25 @@ async def test_corrupt_store_wizard_start_503(client, tmp_codes_path):
     assert resp.status == 503
     data = await resp.json()
     assert data["message"] == data["error"]
+
+
+# ---------- Invalid JSON bodies → 400 ----------
+
+
+@pytest.mark.parametrize("body", [b"{broken", b"\xff\xfe", b""])
+@pytest.mark.parametrize(
+    "path",
+    ["/api/devices/import", "/api/devices/A00001/cmd", "/api/wizard/start"],
+)
+async def test_invalid_json_body_returns_400(client, path, body):
+    resp = await client.post(path, data=body)
+    assert resp.status == 400
+
+
+async def test_invalid_json_raw_cmd_returns_400(aiohttp_client, tmp_codes_path):
+    gw = SimGateway()
+    gw.connect()
+    ctx = AppContext(gateway=gw, config=Config(debug_mode=True))
+    client = await aiohttp_client(create_app(ctx))
+    resp = await client.post("/api/devices/A00001/raw-cmd", data=b"{broken")
+    assert resp.status == 400

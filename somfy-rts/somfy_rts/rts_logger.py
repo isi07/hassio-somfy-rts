@@ -18,7 +18,6 @@ import logging
 import logging.handlers
 import sys
 from datetime import datetime
-from typing import Optional
 
 _LOG_FILE = "/share/somfy_rts/rts_frames.log"
 _LOG_FILE_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
@@ -28,7 +27,7 @@ _LOG_FILE_BACKUP_COUNT = 3
 _STDOUT_HANDLER_NAME = "somfy_rts_frames_stdout"
 
 # Module-level singleton — None until init() is called
-rts_logger: Optional["RTSLogger"] = None
+rts_logger: RTSLogger | None = None
 
 
 class RTSLogger:
@@ -217,7 +216,7 @@ class RTSLogger:
 
 # ---------- Module-level init ----------
 
-def init(log_format: str = "text", file_logging: bool = False) -> "RTSLogger":
+def init(log_format: str = "text", file_logging: bool = False) -> RTSLogger:
     """Initialize the module-level rts_logger singleton.
 
     Args:
@@ -227,7 +226,7 @@ def init(log_format: str = "text", file_logging: bool = False) -> "RTSLogger":
     Returns:
         The initialized RTSLogger instance.
     """
-    global rts_logger  # noqa: PLW0603
+    global rts_logger
     rts_logger = RTSLogger(log_format=log_format, file_logging=file_logging)
     return rts_logger
 
@@ -240,4 +239,4 @@ def _iso_now() -> str:
     Uses the system's local timezone, which is set via the TZ environment
     variable by run.sh (from the timezone option in config.yaml).
     """
-    return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    return datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S")

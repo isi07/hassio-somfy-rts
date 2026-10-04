@@ -1,6 +1,7 @@
 """Tests for rolling_code.py — atomic RC persistence."""
 
 import json
+
 import pytest
 
 
@@ -29,6 +30,7 @@ class TestIncrement:
 class TestAtomicPersistence:
     def test_file_exists_after_increment(self, tmp_codes_path):
         import os
+
         from somfy_rts.rolling_code import get_and_increment
         get_and_increment("A00001")
         assert os.path.exists(tmp_codes_path)

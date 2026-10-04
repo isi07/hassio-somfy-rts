@@ -1,11 +1,7 @@
 """Tests for rts_logger.py — structured RTS frame logging."""
 
-import io
 import json
 import logging
-import os
-import sys
-import tempfile
 
 import pytest
 
@@ -202,7 +198,7 @@ class TestSingleton:
 
     def test_propagate_false(self):
         from somfy_rts.rts_logger import RTSLogger
-        logger = RTSLogger()
+        RTSLogger()
         frames_logger = logging.getLogger("somfy_rts.frames")
         assert frames_logger.propagate is False
 

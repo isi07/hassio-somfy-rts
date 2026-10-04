@@ -83,7 +83,7 @@ def log_rts_frame(
         success:   True if all send_raw() calls succeeded without exception.
         error:     Exception message when success is False.
     """
-    from .rts_logger import rts_logger  # noqa: PLC0415
+    from .rts_logger import rts_logger
     if rts_logger is not None:
         rts_logger.log_frame(
             device_id=device_id.upper(),

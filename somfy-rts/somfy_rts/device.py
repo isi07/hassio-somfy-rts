@@ -21,13 +21,13 @@ PROG-Befehle (beide Modi):
 import json
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 
+from . import rts as rts_module
 from .config import DeviceConfig
 from .gateway import BaseGateway, GatewayError
 from .mqtt_client import MQTTClient
 from .rolling_code import RollingCodeStoreError, get_current
-from . import rts as rts_module
 from .rts import RTSSequence, log_rts_frame
 
 logger = logging.getLogger(__name__)
@@ -35,12 +35,12 @@ logger = logging.getLogger(__name__)
 _PROFILES_PATH = os.path.join(os.path.dirname(__file__), "device_profiles.json")
 
 # Befehlsnamen-Übersetzung für last_command-Sensor (leer = kein Mapping, Originalname verwenden)
-_COMMAND_DISPLAY: Dict[str, str] = {}
+_COMMAND_DISPLAY: dict[str, str] = {}
 
 # Notfall-Fallback wenn device_profiles.json komplett fehlt oder unlesbar ist.
 # Spiegelt das shutter-Profil mit korrekten Schicht-2-Begriffen wider.
 # Normalerweise wird stattdessen profiles.get("shutter", _FALLBACK_PROFILE) genutzt.
-_FALLBACK_PROFILE: Dict[str, Any] = {
+_FALLBACK_PROFILE: dict[str, Any] = {
     "ha_platform": "cover",
     "has_tilt": False,
     "device_class": "shutter",
@@ -57,7 +57,7 @@ _FALLBACK_PROFILE: Dict[str, Any] = {
 }
 
 
-def _load_profiles() -> Dict[str, Any]:
+def _load_profiles() -> dict[str, Any]:
     try:
         with open(_PROFILES_PATH, encoding="utf-8") as f:
             return json.load(f)
@@ -119,7 +119,7 @@ class Device:
         self._state = "stopped"
 
     @property
-    def ha_platform(self) -> Optional[str]:
+    def ha_platform(self) -> str | None:
         """HA Discovery-Plattform aus device_profiles.json: 'cover', 'light', 'switch' oder None."""
         return self._profile.get("ha_platform", "cover")
 
@@ -225,7 +225,7 @@ class Device:
         elif self._device.mode == "B":
             self._publish_diagnostics(last_command=rts_action, raw_frame=seq.frame)
 
-    def _send_rts(self, action: str, repeat: int = 1) -> Optional[RTSSequence]:
+    def _send_rts(self, action: str, repeat: int = 1) -> RTSSequence | None:
         """Baut RTS-Sequenz (RC atomar persistiert) und sendet beide Befehle via Gateway.
 
         Args:

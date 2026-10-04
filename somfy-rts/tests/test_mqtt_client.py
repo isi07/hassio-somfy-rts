@@ -1,12 +1,16 @@
 """Tests for mqtt_client.py — discovery_topics() and unregister_device()."""
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 from somfy_rts.config import DeviceConfig
-from somfy_rts.mqtt_client import HA_DISCOVERY, MQTT_TOPIC_PREFIX, MQTTClient, discovery_topics, state_topics
-
+from somfy_rts.mqtt_client import (
+    HA_DISCOVERY,
+    MQTT_TOPIC_PREFIX,
+    MQTTClient,
+    discovery_topics,
+    state_topics,
+)
 
 # ---------- Fixtures ----------
 

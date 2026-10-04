@@ -31,6 +31,7 @@ class TestAddressGeneration:
 
     def test_prefix_locked_after_first_device(self, tmp_codes_path, mock_gateway):
         import json
+
         from somfy_rts.wizard import PairingWizard
         PairingWizard(mock_gateway, "A000").start("Gerät 1", "shutter")
         with open(tmp_codes_path, encoding="utf-8") as f:
@@ -39,6 +40,7 @@ class TestAddressGeneration:
 
     def test_prefix_stored_in_settings(self, tmp_codes_path, mock_gateway):
         import json
+
         from somfy_rts.wizard import PairingWizard
         PairingWizard(mock_gateway, "C200").start("Gerät 1", "shutter")
         with open(tmp_codes_path, encoding="utf-8") as f:
@@ -47,6 +49,7 @@ class TestAddressGeneration:
 
     def test_device_type_saved_in_codes(self, tmp_codes_path, mock_gateway):
         import json
+
         from somfy_rts.wizard import PairingWizard
         PairingWizard(mock_gateway, "A000").start("Markise", "awning")
         with open(tmp_codes_path, encoding="utf-8") as f:
@@ -56,6 +59,7 @@ class TestAddressGeneration:
 
     def test_device_type_default_is_shutter(self, tmp_codes_path, mock_gateway):
         import json
+
         from somfy_rts.wizard import PairingWizard
         PairingWizard(mock_gateway, "A000").start("Rollladen")
         with open(tmp_codes_path, encoding="utf-8") as f:

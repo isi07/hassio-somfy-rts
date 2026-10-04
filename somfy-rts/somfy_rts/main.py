@@ -85,7 +85,7 @@ async def _async_main() -> None:
             logger.error("Gateway Fehler: %s — erneuter Versuch in 10s.", e)
             try:
                 await asyncio.wait_for(shutdown_event.wait(), timeout=10.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
     if shutdown_event.is_set():

@@ -1,0 +1,8 @@
+# Ruff configuration for the whole repository (add-on, tests, tools).
+# ruff is pinned in somfy-rts/requirements-test.txt; its default rule set applies,
+# so a rule-set change only arrives through a deliberate ruff version bump.
+target-version = "py314"  # keep in sync with BUILD_FROM / setup-python
+
+[lint.per-file-ignores]
+# Blocking file I/O in async test functions is harmless (temp files, no event-loop load)
+"somfy-rts/tests/**" = ["ASYNC230"]

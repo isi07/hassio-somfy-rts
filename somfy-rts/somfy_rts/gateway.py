@@ -6,7 +6,6 @@ Erweiterbar für zukünftige Gateways (z.B. SIGNALduino) durch Ableitung von Bas
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import Optional
 
 import serial
 
@@ -56,7 +55,7 @@ class CULGateway(BaseGateway):
     def __init__(self, port: str, baud_rate: int = 9600) -> None:
         self._port = port
         self._baud_rate = baud_rate
-        self._serial: Optional[serial.Serial] = None
+        self._serial: serial.Serial | None = None
 
     def connect(self) -> None:
         """Öffnet die serielle Verbindung und verifiziert culfw-Firmware."""
@@ -79,7 +78,7 @@ class CULGateway(BaseGateway):
             self._serial.flush()
             time.sleep(0.5)  # Wait until CUL is ready to receive RTS commands
             logger.info("NanoCUL verbunden auf %s — %s (RTS Modus aktiv)", self._port, version)
-            from .rts_logger import rts_logger  # noqa: PLC0415
+            from .rts_logger import rts_logger
             if rts_logger is not None:
                 rts_logger.log_connect(self._port, self._baud_rate)
         except serial.SerialException as e:
@@ -89,7 +88,7 @@ class CULGateway(BaseGateway):
         if self._serial and self._serial.is_open:
             self._serial.close()
             logger.info("NanoCUL getrennt.")
-            from .rts_logger import rts_logger  # noqa: PLC0415
+            from .rts_logger import rts_logger
             if rts_logger is not None:
                 rts_logger.log_disconnect(self._port)
 
@@ -110,8 +109,8 @@ class CULGateway(BaseGateway):
             logger.warning("CUL: I/O Fehler — versuche Reconnect... (%s)", exc)
             try:
                 self._serial.close()
-            except Exception:
-                pass
+            except (OSError, serial.SerialException) as close_exc:
+                logger.debug("CUL: Schließen nach I/O-Fehler fehlgeschlagen: %s", close_exc)
             time.sleep(2)
             try:
                 self.connect()
@@ -157,7 +156,7 @@ class SimGateway(BaseGateway):
         """Simulate a gateway connection."""
         self._connected = True
         logger.info("[SIM] Gateway verbunden auf %s", self._port)
-        from .rts_logger import rts_logger  # noqa: PLC0415
+        from .rts_logger import rts_logger
         if rts_logger is not None:
             rts_logger.log_connect(self._port, 0)
 
@@ -166,7 +165,7 @@ class SimGateway(BaseGateway):
         if self._connected:
             self._connected = False
             logger.info("[SIM] Gateway getrennt.")
-            from .rts_logger import rts_logger  # noqa: PLC0415
+            from .rts_logger import rts_logger
             if rts_logger is not None:
                 rts_logger.log_disconnect(self._port)
 

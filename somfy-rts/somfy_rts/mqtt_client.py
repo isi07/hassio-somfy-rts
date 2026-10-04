@@ -30,7 +30,7 @@ Origin-Block in allen Discovery-Payloads.
 import json
 import logging
 import time
-from typing import Callable, Dict, Optional
+from collections.abc import Callable
 
 import paho.mqtt.client as mqtt
 from paho.mqtt.properties import Properties
@@ -73,7 +73,7 @@ class MQTTClient:
             client_id="somfy_rts_addon",
             clean_session=True,
         )
-        self._handlers: Dict[str, Callable[[str], None]] = {}
+        self._handlers: dict[str, Callable[[str], None]] = {}
 
         if config.mqtt_user:
             self._client.username_pw_set(config.mqtt_user, config.mqtt_password)
@@ -126,7 +126,7 @@ class MQTTClient:
         self._client.publish(
             f"{HA_DISCOVERY}/sensor/somfy_rts_gw_status/config", "", retain=True
         )
-        conn_payload: Dict = {
+        conn_payload: dict = {
             "name": "Verbindung",
             "unique_id": "somfy_rts_gw_status",
             "state_topic": LWT_TOPIC,
@@ -154,7 +154,7 @@ class MQTTClient:
         ]
 
         for sensor_id, sensor_name, state_topic, icon, unit in sensor_defs:
-            payload: Dict = {
+            payload: dict = {
                 "name": sensor_name,
                 "unique_id": f"somfy_rts_gw_{sensor_id}",
                 "state_topic": state_topic,
@@ -188,7 +188,7 @@ class MQTTClient:
         self,
         device: DeviceConfig,
         command_handler: Callable[[str], None],
-        profile: Optional[Dict] = None,
+        profile: dict | None = None,
     ) -> None:
         """Registriert ein Gerät via HA Discovery — Modus A oder B.
 
@@ -205,7 +205,7 @@ class MQTTClient:
         self,
         device: DeviceConfig,
         command_handler: Callable[[str], None],
-        profile: Dict,
+        profile: dict,
     ) -> None:
         """Modus A: Haupt-Entity (Cover/Light/Switch) + 3 Diagnose-Sensoren + 2 PROG-Buttons.
 
@@ -226,7 +226,7 @@ class MQTTClient:
         ha_platform = profile.get("ha_platform", "cover")
 
         if ha_platform == "cover":
-            cover_payload: Dict = {
+            cover_payload: dict = {
                 "name": device.name,
                 "unique_id": f"{device.unique_id_base}_cover",
                 "state_topic": state_topic,
@@ -250,7 +250,7 @@ class MQTTClient:
 
         elif ha_platform in ("light", "switch"):
             # Light- oder Switch-Entity: HA sendet "ON"/"OFF", Device übersetzt intern nach OPEN/CLOSE
-            entity_payload: Dict = {
+            entity_payload: dict = {
                 "name": device.name,
                 "unique_id": f"{device.unique_id_base}_{ha_platform}",
                 "command_topic": command_topic,
@@ -275,7 +275,7 @@ class MQTTClient:
             ("device_address", "Adresse",        "mdi:identifier", None),
         ]
         for sensor_id, sensor_name, icon, attr_topic in diag_sensors:
-            s_payload: Dict = {
+            s_payload: dict = {
                 "name": f"{device.name} {sensor_name}",
                 "unique_id": f"{device.unique_id_base}_{sensor_id}",
                 "state_topic": f"{prefix}/{slug}/{sensor_id}",
@@ -293,7 +293,7 @@ class MQTTClient:
         self._subscribe(command_topic, command_handler)
 
         # MY Button (Lieblingsposition) — alle Gerätetypen, entity_category: config
-        my_payload: Dict = {
+        my_payload: dict = {
             "name": f"{device.name} MY",
             "unique_id": f"{device.unique_id_base}_my",
             "command_topic": command_topic,
@@ -319,7 +319,7 @@ class MQTTClient:
                 btn = buttons.get(btn_key, {})
                 label = btn.get("label", action_key.title())
                 icon = btn.get("icon", "mdi:remote")
-                tilt_payload: Dict = {
+                tilt_payload: dict = {
                     "name": f"{device.name} {label}",
                     "unique_id": f"{device.unique_id_base}_{action_key}",
                     "command_topic": command_topic,
@@ -359,7 +359,7 @@ class MQTTClient:
         self,
         device: DeviceConfig,
         command_handler: Callable[[str], None],
-        profile: Dict,
+        profile: dict,
     ) -> None:
         """Modus B: 3 Button-Entities (config) + 2 Diagnose-Sensoren.
         Button-Labels und Icons kommen aus device_profiles.json.
@@ -420,7 +420,7 @@ class MQTTClient:
 
         # MY Button (Lieblingsposition) — alle Gerätetypen, entity_category: config
         my_cmd_topic = f"{prefix}/{slug}/button/my"
-        my_b_payload: Dict = {
+        my_b_payload: dict = {
             "name": f"{device.name} MY",
             "unique_id": f"{device.unique_id_base}_my",
             "command_topic": my_cmd_topic,
@@ -488,7 +488,7 @@ class MQTTClient:
         ]
 
         for btn_key, btn_name, icon, payload_press in prog_buttons:
-            btn_payload: Dict = {
+            btn_payload: dict = {
                 "name": btn_name,
                 "unique_id": f"{device.unique_id_base}_{btn_key}",
                 "command_topic": cmd_topic,
@@ -536,7 +536,7 @@ class MQTTClient:
         topic = f"{MQTT_TOPIC_PREFIX}/{device.slug}/{key}"
         self._client.publish(topic, value, retain=True)
 
-    def publish_json_attributes(self, device: DeviceConfig, key: str, attrs: Dict) -> None:
+    def publish_json_attributes(self, device: DeviceConfig, key: str, attrs: dict) -> None:
         """Veröffentlicht JSON-Attribute für einen Sensor (z.B. raw_frame für last_command).
 
         Publiziert auf Topic somfy/{slug}/{key}_attr als JSON-String.
@@ -557,7 +557,7 @@ class MQTTClient:
         userdata: object,
         flags: mqtt.ConnectFlags,
         reason_code: ReasonCode,
-        properties: Optional[Properties],
+        properties: Properties | None,
     ) -> None:
         """Publish 'online' and (re-)subscribe all command topics after a connect.
 
@@ -582,7 +582,7 @@ class MQTTClient:
         userdata: object,
         flags: mqtt.DisconnectFlags,
         reason_code: ReasonCode,
-        properties: Optional[Properties],
+        properties: Properties | None,
     ) -> None:
         """Log unexpected disconnects; paho reconnects automatically (loop_start).
 
@@ -609,7 +609,7 @@ class MQTTClient:
             # terminate paho's network loop thread and silently stop all commands.
             try:
                 handler(payload)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("Fehler im Handler für Topic %s", topic)
         else:
             logger.warning("Kein Handler für Topic: %s", topic)
@@ -625,7 +625,7 @@ def _avail_block() -> dict:
     }
 
 
-def _sub_device(device: DeviceConfig, profile: Optional[Dict] = None) -> dict:
+def _sub_device(device: DeviceConfig, profile: dict | None = None) -> dict:
     return {
         "identifiers": [device.unique_id_base],
         "name": device.name,
@@ -685,15 +685,15 @@ def discovery_topics(device: DeviceConfig) -> list[str]:
     ]
 
     # Geräteprofil laden — für ha_platform (Modus A) und has_tilt
-    profile: Dict = {}
+    profile: dict = {}
     try:
         import os as _os
         _profiles_path = _os.path.join(_os.path.dirname(__file__), "device_profiles.json")
         with open(_profiles_path, encoding="utf-8") as _f:
             _profiles = json.load(_f)
         profile = _profiles.get(device.type, {})
-    except Exception:
-        pass
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("device_profiles.json nicht lesbar (%s) — Standard-Topics.", exc)
 
     if device.mode == "B":
         topics += [

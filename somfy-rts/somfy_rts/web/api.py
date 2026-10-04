@@ -30,7 +30,6 @@ import logging
 import pathlib
 import re
 from collections import deque
-from typing import Optional
 
 from aiohttp import web
 
@@ -59,7 +58,7 @@ _HA_PLATFORM_BY_TYPE: dict = {
 }
 
 
-def _device_ha_platform(device_type: str) -> Optional[str]:
+def _device_ha_platform(device_type: str) -> str | None:
     """Gibt die ha_platform aus device_profiles.json zurück ('cover', 'light', 'switch', None)."""
     return _HA_PLATFORM_BY_TYPE.get(device_type, "cover")
 
@@ -86,12 +85,12 @@ class AppContext:
         self,
         gateway: BaseGateway,
         config: Config,
-        mqtt_client: Optional[MQTTClient] = None,
+        mqtt_client: MQTTClient | None = None,
     ) -> None:
         self.gateway = gateway
         self.config = config
         self.mqtt_client = mqtt_client
-        self.wizard: Optional[PairingWizard] = None
+        self.wizard: PairingWizard | None = None
         self.log_buffer: deque[dict] = deque(maxlen=100)
 
     def attach_log_handler(self) -> None:
@@ -159,8 +158,8 @@ async def import_device(request: web.Request) -> web.Response:
     ctx: AppContext = request.app["ctx"]
     try:
         data = await request.json()
-    except Exception:
-        raise web.HTTPBadRequest(reason="Ungültiges JSON.")
+    except ValueError as exc:  # JSONDecodeError, UnicodeDecodeError
+        raise web.HTTPBadRequest(reason="Ungültiges JSON.") from exc
 
     name = str(data.get("name", "")).strip()
     device_type = str(data.get("device_type", "shutter")).strip().lower()
@@ -246,8 +245,8 @@ async def send_command(request: web.Request) -> web.Response:
 
     try:
         data = await request.json()
-    except Exception:
-        raise web.HTTPBadRequest(reason="Ungültiges JSON.")
+    except ValueError as exc:  # JSONDecodeError, UnicodeDecodeError
+        raise web.HTTPBadRequest(reason="Ungültiges JSON.") from exc
 
     action = str(data.get("action", "")).upper()
     if action not in {"OPEN", "CLOSE", "STOP", "MY_UP", "MY_DOWN", "PROG"}:
@@ -390,8 +389,8 @@ async def send_raw_cmd(request: web.Request) -> web.Response:
 
     try:
         data = await request.json()
-    except Exception:
-        raise web.HTTPBadRequest(reason="Ungültiges JSON.")
+    except ValueError as exc:  # JSONDecodeError, UnicodeDecodeError
+        raise web.HTTPBadRequest(reason="Ungültiges JSON.") from exc
 
     command = str(data.get("command", "")).upper()
     if command not in _RAW_CMD_VALID_ACTIONS:
@@ -493,7 +492,7 @@ async def wizard_status(request: web.Request) -> web.Response:
         {
             "state": ctx.wizard.state.name,
             "address": ctx.wizard.address,
-            "error": ctx.wizard._session.error,  # noqa: SLF001
+            "error": ctx.wizard._session.error,
             "timed_out": ctx.wizard.is_timed_out(),
         }
     )
@@ -508,8 +507,8 @@ async def wizard_start(request: web.Request) -> web.Response:
     ctx: AppContext = request.app["ctx"]
     try:
         data = await request.json()
-    except Exception:
-        raise web.HTTPBadRequest(reason="Ungültiges JSON.")
+    except ValueError as exc:  # JSONDecodeError, UnicodeDecodeError
+        raise web.HTTPBadRequest(reason="Ungültiges JSON.") from exc
 
     name = str(data.get("name", "")).strip()
     device_type = str(data.get("device_type", "shutter"))

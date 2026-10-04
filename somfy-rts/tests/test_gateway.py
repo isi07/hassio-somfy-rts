@@ -72,7 +72,8 @@ class TestCULGatewayReconnect:
 
     def _make_gateway(self):
         """Return a CULGateway with a mocked serial port already 'open'."""
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
+
         import serial
         from somfy_rts.gateway import CULGateway
 
@@ -93,39 +94,45 @@ class TestCULGatewayReconnect:
 
     def test_send_raw_closes_serial_before_reconnect(self):
         """On I/O error the serial port is closed before reconnect attempt."""
-        from somfy_rts.gateway import GatewayError
         from unittest.mock import patch
+
+        from somfy_rts.gateway import GatewayError
         gw, mock_serial = self._make_gateway()
         mock_serial.write.side_effect = OSError("broken pipe")
 
-        with patch.object(gw, "connect", side_effect=GatewayError("no device")):
-            with pytest.raises(GatewayError):
-                gw.send_raw("Yr1")
+        with (
+            patch.object(gw, "connect", side_effect=GatewayError("no device")),
+            pytest.raises(GatewayError),
+        ):
+            gw.send_raw("Yr1")
 
         mock_serial.close.assert_called_once()
 
     def test_send_raw_attempts_reconnect_on_serial_exception(self):
         """serial.SerialException triggers a reconnect attempt."""
+        from unittest.mock import patch
+
         import serial
         from somfy_rts.gateway import GatewayError
-        from unittest.mock import patch
         gw, mock_serial = self._make_gateway()
         mock_serial.write.side_effect = serial.SerialException("device lost")
 
         connect_called = []
-        with patch.object(gw, "connect", side_effect=lambda: connect_called.append(1)):
-            with pytest.raises(GatewayError):
-                gw.send_raw("Yr1")
+        with (
+            patch.object(gw, "connect", side_effect=lambda: connect_called.append(1)),
+            pytest.raises(GatewayError),
+        ):
+            gw.send_raw("Yr1")
 
         assert len(connect_called) == 1, "connect() must be called exactly once on I/O error"
 
     def test_send_raw_raises_even_after_successful_reconnect(self):
         """Even when reconnect succeeds the original exception is still raised."""
-        from somfy_rts.gateway import GatewayError
         from unittest.mock import patch
+
+        from somfy_rts.gateway import GatewayError
         gw, mock_serial = self._make_gateway()
         mock_serial.write.side_effect = OSError("glitch")
 
-        with patch.object(gw, "connect"):  # reconnect succeeds
-            with pytest.raises(GatewayError):
-                gw.send_raw("Yr1")
+        with patch.object(gw, "connect"), pytest.raises(GatewayError):  # reconnect succeeds
+            gw.send_raw("Yr1")

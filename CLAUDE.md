@@ -682,7 +682,8 @@ def send(address: str, rolling_code: int, cmd: str) -> bool:
 - Parameter mit Typen annotieren
 - Rückgabewert mit `->` annotieren
 - `-> None` explizit angeben wenn nichts zurückgegeben wird
-- Komplexe Typen aus `typing` importieren: `Optional`, `List`, `Dict`, `Tuple`, `Union`
+- Moderne Syntax (Python 3.14, von ruff `UP` erzwungen): `dict[str, int]`, `list[str]`,
+  `X | None` statt `Optional[X]`; `Callable` aus `collections.abc`; `Any` weiterhin aus `typing`
 
 ### Docstrings
 
@@ -700,21 +701,23 @@ def send_prog(self, address: str) -> bool:
     """
 ```
 
-### Ruff Regeln (bereits in build.yaml)
+### Ruff
 
-| Selector | Bedeutung |
-|----------|-----------|
-| `E` | pycodestyle Fehler (Pflicht) |
-| `F` | pyflakes — unused imports, undefined names (Pflicht) |
-| `I` | isort — Import-Reihenfolge |
-| `UP` | pyupgrade — moderne Python-Syntax |
+- Version gepinnt in `somfy-rts/requirements-test.txt` (aktuell `0.16.10`), Konfiguration in
+  `ruff.toml` (Repo-Root, `target-version = "py314"`)
+- Es gilt ruffs **Standard-Regelsatz** (ab 0.16 u. a. `E`, `F`, `I`, `UP`, `B`, `BLE`, `S`, `DTZ`,
+  `RUF`, `SIM`, `ASYNC`) — Änderungen am Regelsatz kommen nur über ein bewusstes ruff-Update
+- CI prüft `somfy-rts/` (Add-on **und** Tests) und `tools/`: `ruff check somfy-rts/ tools/`
+- `noqa` nur mit Begründung und nur für Regeln, die tatsächlich anschlagen (`RUF100` meldet
+  überflüssige)
 
 ### Allgemein
 
 - **Keine Magic Numbers:** Konstanten definieren — `BAUDRATE = 9600` statt direkt `9600`
-- **Maximale Zeilenlänge:** 88 Zeichen (ruff default)
+- **Zeilenlänge:** Richtwert 88 Zeichen (wird von ruff nicht erzwungen, `E501` ist nicht aktiv)
 - **Kein `print()`:** immer `logging` verwenden
 - **Spezifische Exceptions:** `except serial.SerialException` statt `except Exception`
+  (ruff `BLE001`); einzige Ausnahme: Sicherheitsnetz an Thread-Grenzen mit `logger.exception`
 
 ### Bestehender Code
 
@@ -786,7 +789,7 @@ der fehlerhaften Commits und neue Patch-Version releasen.
 
 ```
 □ pytest — alle Tests grün
-□ ruff check somfy_rts/ — keine Lint-Fehler
+□ ruff check somfy-rts/ tools/ — keine Lint-Fehler (aus dem Repo-Root)
 □ CLAUDE.md aktualisiert (bei Struktur-/API-/Modul-Änderungen)
 □ DOCS.md aktualisiert (bei Feature-/Config-Änderungen)
 □ Code + Docs im gleichen Commit

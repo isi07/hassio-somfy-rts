@@ -24,13 +24,13 @@ import shutil
 import tempfile
 import threading
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 CODES_PATH = os.environ.get("SOMFY_CODES_PATH", "/data/somfy_codes.json")
 
-_EMPTY_STORE: Dict[str, Any] = {
+_EMPTY_STORE: dict[str, Any] = {
     "devices": [],
     "groups": [],
     "settings": {
@@ -43,7 +43,7 @@ _EMPTY_STORE: Dict[str, Any] = {
 _STORE_LOCK = threading.RLock()
 
 # Path of the backup made for the current corruption episode (one copy only).
-_corrupt_backup: Optional[str] = None
+_corrupt_backup: str | None = None
 
 
 class RollingCodeStoreError(OSError):
@@ -75,7 +75,7 @@ def _backup_corrupt_file() -> None:
         logger.error("Kann beschädigte somfy_codes.json nicht sichern: %s", e)
 
 
-def _load() -> Dict[str, Any]:
+def _load() -> dict[str, Any]:
     """Load the store from CODES_PATH.
 
     Returns:
@@ -125,7 +125,7 @@ def _fsync_dir(path: str) -> None:
         os.close(fd)
 
 
-def _save_atomic(store: Dict[str, Any]) -> None:
+def _save_atomic(store: dict[str, Any]) -> None:
     """Write store atomically to CODES_PATH (tempfile + fsync + os.replace).
 
     Raises:
@@ -134,7 +134,7 @@ def _save_atomic(store: Dict[str, Any]) -> None:
     """
     dir_ = os.path.dirname(os.path.abspath(CODES_PATH))
     with _STORE_LOCK:
-        tmp_path: Optional[str] = None
+        tmp_path: str | None = None
         try:
             with tempfile.NamedTemporaryFile(
                 mode="w", dir=dir_, delete=False, suffix=".tmp", encoding="utf-8"
@@ -159,12 +159,12 @@ def _save_atomic(store: Dict[str, Any]) -> None:
                     pass
 
 
-def _find_or_create_device(store: Dict, address: str, name: str) -> Dict:
+def _find_or_create_device(store: dict, address: str, name: str) -> dict:
     addr = address.upper()
     for dev in store["devices"]:
         if dev.get("address", "").upper() == addr:
             return dev
-    entry: Dict[str, Any] = {"address": addr, "name": name, "rolling_code": 0}
+    entry: dict[str, Any] = {"address": addr, "name": name, "rolling_code": 0}
     store["devices"].append(entry)
     return entry
 
@@ -203,7 +203,7 @@ def get_and_increment(address: str, name: str = "") -> tuple[int, int]:
     logger.debug("RC %s: %d → %d", address.upper(), old_code, new_code)
 
     # Structured frame logging (optional — only active after init())
-    from .rts_logger import rts_logger  # noqa: PLC0415
+    from .rts_logger import rts_logger
     if rts_logger is not None:
         rts_logger.log_rc_persist(address.upper(), new_code, CODES_PATH)
 
@@ -219,7 +219,7 @@ def get_current(address: str) -> int:
     return 0
 
 
-def get_settings() -> Dict[str, Any]:
+def get_settings() -> dict[str, Any]:
     """Gibt den settings-Block aus somfy_codes.json zurück."""
     return _load().get("settings", copy.deepcopy(_EMPTY_STORE["settings"]))
 
