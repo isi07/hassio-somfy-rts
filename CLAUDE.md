@@ -239,9 +239,9 @@ hassio-somfy-rts/
 ├── .gitignore / .gitattributes        # LF im Repo erzwungen
 ├── .yamllint
 ├── .github/
-│   ├── dependabot.yaml                # wöchentliche Updates der GitHub Actions
+│   ├── dependabot.yaml                # wöchentliche Updates: GitHub Actions + pip
 │   └── workflows/
-│       └── build.yaml                 # CI: Lint+Tests immer, Build+Release nur bei Tags
+│       └── build.yaml                 # CI: Lint+Tests+Build-Check immer, Push+Release nur bei Tags
 ├── tools/
 │   └── cul_sniff.py                   # Diagnose: liest CUL-Rohzeilen (nicht im Image)
 ├── somfy-rts/                         # Die eigentliche App
@@ -513,14 +513,17 @@ Workflow `.github/workflows/build.yaml`, Job-Kette `lint → build → manifest 
 - **lint** (jeder Push auf `main`, jeder PR, jeder Tag): ruff (gepinnt auf `0.15.10` —
   lokal dieselbe Version verwenden; ab 0.16 gelten zusätzliche Standardregeln), **pytest**, yamllint,
   shellcheck, hadolint, JSON-Check, HA-Add-on-Linter, actionlint
-- **build** (nur Tag `v*`): Images pro Arch, Version aus `config.yaml`
+- **build** (immer, Matrix amd64/aarch64): baut das Image — bei PR/`main` nur als Check,
+  Login + Push nach ghcr.io **nur bei Tag `v*`**. So testen auch Dependabot-PRs die Docker-Actions
 - **manifest**: Multi-Arch-Image `ghcr.io/isi07/somfy-rts:<version>` + `:latest`
 - **release**: GitHub Release, Notes = `git cliff --latest` (Pre-Release bei `-` im Tag)
 - **Images:** `ghcr.io/isi07/somfy-rts:<version>-<arch>`; `config.yaml` → `image: ghcr.io/isi07/somfy-rts`
 - **Conventional Commits:** `feat:`, `fix:`, `perf:`, `refactor:`, `docs:`, `chore:`, `ci:`, `test:`
   (`chore: release …` wird im Changelog ausgeblendet)
 - **Tag-Format:** `v0.1.0` (stable), `v0.1.0-beta.1` (pre-release)
-- **Dependabot:** wöchentliche PRs für GitHub Actions — nicht zusammen mit einem Release mergen
+- **Dependabot** (`.github/dependabot.yaml`): wöchentliche PRs für GitHub Actions und pip
+  (`somfy-rts/requirements*.txt`). Einzeln mergen, erst wenn lint **und** build grün sind;
+  nicht zusammen mit einem Release. Basis-Image (BUILD_FROM in `build.yaml`) sieht Dependabot nicht
 
 ---
 
