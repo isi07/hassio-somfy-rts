@@ -678,56 +678,27 @@ class TestProgEndpoints:
         assert resp.status == 404
 
 
-# ---------- POST /api/wizard/send_prog_long ----------
+# ---------- Wizard has no PROG Lang ----------
+# PROG Lang from the new, not yet paired address cannot put a motor into
+# pairing mode — the wizard therefore does not offer it (device list does).
 
 
-async def test_wizard_send_prog_long(client, ctx, tmp_codes_path):
-    """Wizard send_prog_long keeps state at ADDR_READY and sends Yr14."""
-    # Start wizard first
-    await client.post(
-        "/api/wizard/start",
-        data=json.dumps({"name": "Testgerät", "device_type": "shutter"}),
-        headers={"Content-Type": "application/json"},
-    )
+async def test_wizard_send_prog_long_endpoint_removed(client):
     resp = await client.post("/api/wizard/send_prog_long")
-    assert resp.status == 200
-    data = await resp.json()
-    # State remains ADDR_READY — not PROG_SENT
-    assert data["state"] == "ADDR_READY"
-    assert data["repeat"] == 14
-    assert ctx.gateway.sent_commands[0] == "Yr14"
+    assert resp.status in (404, 405)
 
 
-async def test_wizard_send_prog_long_no_session(client):
-    """send_prog_long without an active wizard session returns 400."""
-    resp = await client.post("/api/wizard/send_prog_long")
-    assert resp.status == 400
-
-
-async def test_wizard_full_flow_with_prog_long(client, ctx, tmp_codes_path):
-    """Full wizard flow using send_prog_long + send_prog completes successfully."""
-    # Start
-    r1 = await client.post(
-        "/api/wizard/start",
-        data=json.dumps({"name": "Wohnzimmer", "device_type": "shutter"}),
-        headers={"Content-Type": "application/json"},
-    )
+async def test_wizard_full_flow_without_prog_long(client, ctx, tmp_codes_path):
+    """start → send_prog (Yr4) → confirm completes; only Yr4 PROG is sent."""
+    r1 = await client.post("/api/wizard/start", json={"name": "Wohnzimmer"})
     assert r1.status == 200
-
-    # Send PROG Lang (Yr14) — motor enters pairing mode
-    r2 = await client.post("/api/wizard/send_prog_long")
+    r2 = await client.post("/api/wizard/send_prog")
     assert r2.status == 200
-    assert (await r2.json())["state"] == "ADDR_READY"
-
-    # Send PROG Pair (Yr4) — register virtual remote
-    r3 = await client.post("/api/wizard/send_prog")
+    assert (await r2.json())["state"] == "PROG_SENT"
+    r3 = await client.post("/api/wizard/confirm")
     assert r3.status == 200
-    assert (await r3.json())["state"] == "PROG_SENT"
-
-    # Confirm
-    r4 = await client.post("/api/wizard/confirm")
-    assert r4.status == 200
-    assert (await r4.json())["state"] == "CONFIRMED"
+    assert (await r3.json())["state"] == "CONFIRMED"
+    assert "Yr14" not in ctx.gateway.sent_commands
 
 
 # ---------- GET /api/config/debug ----------

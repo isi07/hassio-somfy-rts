@@ -158,32 +158,6 @@ class TestProgLongAndProgPair:
         first_call = mock_gateway.send_raw.call_args_list[0][0][0]
         assert first_call == "Yr4"
 
-    def test_send_prog_long_stays_in_addr_ready(self, tmp_codes_path, mock_gateway):
-        from somfy_rts.wizard import PairingWizard, WizardState
-        wizard = PairingWizard(mock_gateway)
-        wizard.start("Testgerät", "shutter")
-        wizard.send_prog_long()
-        assert wizard.state == WizardState.ADDR_READY
-
-    def test_send_prog_long_sends_yr14(self, tmp_codes_path, mock_gateway):
-        from somfy_rts.wizard import PairingWizard
-        wizard = PairingWizard(mock_gateway)
-        wizard.start("Testgerät", "shutter")
-        wizard.send_prog_long()
-        # First send_raw call must be "Yr14" (empirisch: Yr13=nein, Yr14=ja, Yr16+=crash)
-        first_call = mock_gateway.send_raw.call_args_list[0][0][0]
-        assert first_call == "Yr14"
-
-    def test_send_prog_long_then_pair_completes_pairing(self, tmp_codes_path, mock_gateway):
-        """Full flow: send_prog_long + send_prog_pair + confirm works end-to-end."""
-        from somfy_rts.wizard import PairingWizard, WizardState
-        wizard = PairingWizard(mock_gateway)
-        wizard.start("Testgerät", "shutter")
-        wizard.send_prog_long()
-        wizard.send_prog_pair()
-        wizard.confirm()
-        assert wizard.state == WizardState.CONFIRMED
-
     def test_send_prog_is_alias_for_send_prog_pair(self, tmp_codes_path, mock_gateway):
         """send_prog() must behave identically to send_prog_pair()."""
         from somfy_rts.wizard import PairingWizard, WizardState
@@ -193,12 +167,6 @@ class TestProgLongAndProgPair:
         assert wizard.state == WizardState.PROG_SENT
         first_call = mock_gateway.send_raw.call_args_list[0][0][0]
         assert first_call == "Yr4"
-
-    def test_send_prog_long_without_start_raises(self, mock_gateway):
-        from somfy_rts.wizard import PairingWizard
-        wizard = PairingWizard(mock_gateway)
-        with pytest.raises(RuntimeError, match="ADDR_READY"):
-            wizard.send_prog_long()
 
     def test_send_prog_pair_without_start_raises(self, mock_gateway):
         from somfy_rts.wizard import PairingWizard
@@ -219,3 +187,10 @@ class TestStoreFailure:
             wiz.send_prog_pair()
         assert wiz.state == WizardState.FAILED
         mock_gateway.send_raw.assert_not_called()
+
+
+class TestNoProgLongInWizard:
+    def test_wizard_has_no_send_prog_long(self):
+        """PROG Lang from the new address cannot work — not offered by the wizard."""
+        from somfy_rts.wizard import PairingWizard
+        assert not hasattr(PairingWizard, "send_prog_long")

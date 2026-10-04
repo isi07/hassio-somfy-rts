@@ -546,8 +546,8 @@ Der `PairingWizard` steuert den 5-stufigen Anlern-Flow:
 2. Motor in Programmiermodus versetzen — entweder:
    - **Klassisch:** Orig.-FB PROG 3s halten → kurzes Auf-Ab
    - **Alternativ:** PROG Lang (Yr14) von einem **bereits angelernten** Gerät der App
-     (`POST /api/devices/{id}/prog-long`). `wizard.send_prog_long()` sendet von der neuen,
-     noch unbekannten Adresse und kann den Motor daher **nicht** in den Anlernmodus versetzen
+     (`POST /api/devices/{id}/prog-long`). Der Wizard selbst bietet **kein** PROG Lang an:
+     Er würde von der neuen, noch unbekannten Adresse senden — wirkungslos (seit 0.4.0 entfernt)
 3. `wizard.send_prog_pair()` (oder Alias `wizard.send_prog()`) — PROG Yr4 senden → virtuellen Sender anlernen
 4. Operator sieht Motor-Bestätigungsbewegung → `wizard.confirm()` aufrufen
 5. `wizard.get_device_config()` — Config-Dict zurückgeben (enthält `mode`)
@@ -556,7 +556,6 @@ Der `PairingWizard` steuert den 5-stufigen Anlern-Flow:
 
 | Methode | repeat | Aktion | Zustand danach |
 |---------|--------|--------|----------------|
-| `send_prog_long()` | Yr14 | PROG Lang von der neuen Adresse — wirkungslos, solange diese Adresse nicht angelernt ist | ADDR_READY |
 | `send_prog_pair()` | Yr4 | Virtuellen Sender am Motor registrieren/deregistrieren | PROG_SENT |
 | `send_prog()` | Yr4 | Alias für `send_prog_pair()` | PROG_SENT |
 
@@ -608,9 +607,8 @@ Das Frame-Log enthält `REPEAT={n}` (text) bzw. `"repeat": n` (JSON).
 
 | Endpunkt | repeat | Aktion |
 |----------|--------|--------|
-| `POST /api/devices/{id}/prog-long` | Yr14 | Motor in Anlernmodus versetzen |
+| `POST /api/devices/{id}/prog-long` | Yr14 | Motor in Anlernmodus versetzen (Gerät muss angelernt sein) |
 | `POST /api/devices/{id}/prog-pair` | Yr4 | Virtuellen Sender registrieren/deregistrieren |
-| `POST /api/wizard/send_prog_long` | Yr14 | Wizard: Motor in Anlernmodus (Zustand bleibt ADDR_READY) |
 | `POST /api/wizard/send_prog` | Yr4 | Wizard: Virtuellen Sender anlernen (→ PROG_SENT) |
 
 ### MQTT Discovery Cleanup beim Löschen

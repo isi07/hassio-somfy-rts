@@ -14,7 +14,6 @@ Endpoints:
 
   GET  /api/wizard/status             → current wizard state
   POST /api/wizard/start              → start pairing (name, device_type)
-  POST /api/wizard/send_prog_long     → transmit PROG Yr14 (motor into pairing mode)
   POST /api/wizard/send_prog          → transmit PROG Yr4 (register virtual remote)
   POST /api/wizard/confirm            → confirm motor pairing
   POST /api/wizard/cancel             → abort wizard session
@@ -357,8 +356,8 @@ async def _send_prog_with_repeat(
 async def send_prog_long(request: web.Request) -> web.Response:
     """Send PROG with repeat=14 (Yr14) — puts the motor in pairing mode.
 
-    Use this instead of holding the PROG button on the original remote.
-    After the motor enters pairing mode, send prog-pair to register the virtual remote.
+    Acts like holding the PROG button, but only from a sender the motor already
+    knows (this device must be paired) — e.g. to pair another remote afterwards.
     repeat=14 (~420 ms) is empirically verified: Yr13 too short, Yr16+ crashes NanoCUL.
     """
     return await _send_prog_with_repeat(request, repeat=14, label="PROG_LONG")
@@ -521,22 +520,6 @@ async def wizard_start(request: web.Request) -> web.Response:
     ctx.wizard = PairingWizard(ctx.gateway, ctx.config.address_prefix)
     addr = ctx.wizard.start(name, device_type, mode)
     return web.json_response({"state": "ADDR_READY", "address": addr})
-
-
-@routes.post("/api/wizard/send_prog_long")
-async def wizard_send_prog_long(request: web.Request) -> web.Response:
-    """Transmit PROG Yr14 to put the motor in pairing mode (no original remote needed).
-
-    Wizard state remains ADDR_READY — follow up with /api/wizard/send_prog.
-    """
-    ctx: AppContext = request.app["ctx"]
-    if ctx.wizard is None:
-        raise web.HTTPBadRequest(reason="Keine aktive Wizard-Sitzung.")
-    try:
-        ctx.wizard.send_prog_long()
-    except (RuntimeError, Exception) as exc:
-        raise web.HTTPConflict(reason=str(exc)) from exc
-    return web.json_response({"state": ctx.wizard.state.name, "repeat": 14})
 
 
 @routes.post("/api/wizard/send_prog")

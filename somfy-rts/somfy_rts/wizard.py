@@ -98,30 +98,13 @@ class PairingWizard:
 
     # ---------- Step 3: Send PROG ----------
 
-    def send_prog_long(self) -> None:
-        """Transmit PROG with repeat=14 (Yr14) to put the motor in pairing mode.
-
-        Replaces the need to hold the PROG button on the original remote.
-        The motor enters pairing mode and waits for a PROG pair command.
-        Wizard state remains ADDR_READY — follow up with send_prog_pair().
-
-        repeat=14 (~420 ms) is empirically verified: Yr13 too short, Yr16+ crashes NanoCUL.
-        """
-        if self._session.state != WizardState.ADDR_READY:
-            raise RuntimeError(
-                f"Wizard nicht im Status ADDR_READY (aktuell: {self._session.state.name})"
-            )
-        self._send_prog_telegram(repeat=14)
-        logger.info(
-            "Wizard: PROG_LONG (Yr14) gesendet an %s — Motor im Anlernmodus.",
-            self._session.address,
-        )
-
     def send_prog_pair(self) -> None:
         """Transmit PROG with repeat=4 (Yr4) to register the virtual remote.
 
-        The motor must already be in pairing mode (via send_prog_long() or the
-        original remote's PROG button). Advances wizard state to PROG_SENT.
+        The motor must already be in pairing mode — via the PROG button of a remote
+        the motor knows, or PROG Lang of an already paired device in the device list.
+        (PROG Lang from this new address cannot work, so the wizard does not offer it.)
+        Advances wizard state to PROG_SENT.
         Rolling code is atomically persisted before transmission.
         """
         if self._session.state != WizardState.ADDR_READY:
