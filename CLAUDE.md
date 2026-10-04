@@ -123,9 +123,9 @@ Jalousien usw.) über einen **NanoCUL USB-Stick** mit **culfw-Firmware** via **M
 
 | Komponente | Details |
 |---|---|
-| App Runtime | Docker, Basis `ghcr.io/home-assistant/{arch}-base-python:3.12-alpine3.18` (Build-Arg `BUILD_FROM` in `build.yaml`) |
+| App Runtime | Docker, Basis `ghcr.io/home-assistant/{arch}-base-python:3.14-alpine3.24` (Build-Arg `BUILD_FROM` in `build.yaml`) |
 | Architekturen | amd64, aarch64 |
-| Sprache | Python 3.12 |
+| Sprache | Python 3.14 (CI-Tests `setup-python` und `BUILD_FROM` immer gleich halten) |
 | Protokoll | Somfy RTS (433,42 MHz) über NanoCUL USB (culfw) |
 | Kommunikation | MQTT (paho-mqtt, Thread-Modus `loop_start`) → Home Assistant |
 | Web-UI | aiohttp (asyncio), HA Ingress Port 8099 |
@@ -513,8 +513,9 @@ Workflow `.github/workflows/build.yaml`, Job-Kette `lint → build → manifest 
 - **lint** (jeder Push auf `main`, jeder PR, jeder Tag): ruff (gepinnt auf `0.15.10` —
   lokal dieselbe Version verwenden; ab 0.16 gelten zusätzliche Standardregeln), **pytest**, yamllint,
   shellcheck, hadolint, JSON-Check, HA-Add-on-Linter, actionlint
-- **build** (immer, Matrix amd64/aarch64): baut das Image — bei PR/`main` nur als Check,
-  Login + Push nach ghcr.io **nur bei Tag `v*`**. So testen auch Dependabot-PRs die Docker-Actions
+- **build** (immer, Matrix amd64/aarch64): baut das Image — bei PR/`main` nur als Check plus
+  Smoke-Test (Container starten, Python-Version + Imports prüfen), Login + Push nach ghcr.io
+  **nur bei Tag `v*`**. So testen auch Dependabot-PRs die Docker-Actions und das Image
 - **manifest**: Multi-Arch-Image `ghcr.io/isi07/somfy-rts:<version>` + `:latest`
 - **release**: GitHub Release, Notes = `git cliff --latest` (Pre-Release bei `-` im Tag)
 - **Images:** `ghcr.io/isi07/somfy-rts:<version>-<arch>`; `config.yaml` → `image: ghcr.io/isi07/somfy-rts`

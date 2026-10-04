@@ -26,10 +26,8 @@ LABEL \
     org.opencontainers.image.revision="${BUILD_REF}" \
     org.opencontainers.image.version="${BUILD_VERSION}"
 
-# Install Python pip and create persistent data directory
-# hadolint ignore=DL3018
-RUN apk add --no-cache py3-pip \
-    && mkdir -p /data
+# Create persistent data directory (pip ships with the base-python image)
+RUN mkdir -p /data
 
 # Set working directory
 WORKDIR /app

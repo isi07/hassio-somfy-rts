@@ -20,7 +20,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.14"  # keep in sync with BUILD_FROM below
 
       - name: Install dependencies
         run: |
@@ -120,10 +120,23 @@ jobs:
           file: somfy-rts/Dockerfile
           platforms: linux/${{ matrix.arch }}
           push: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          # Non-tag runs load the image into the local daemon for the smoke test
+          load: ${{ !startsWith(github.ref, 'refs/tags/v') }}
           tags: ghcr.io/isi07/somfy-rts:${{ steps.version.outputs.version }}-${{ matrix.arch }}
           build-args: |
-            BUILD_FROM=ghcr.io/home-assistant/${{ matrix.arch }}-base-python:3.12-alpine3.18
+            BUILD_FROM=ghcr.io/home-assistant/${{ matrix.arch }}-base-python:3.14-alpine3.24
             BUILD_VERSION=${{ steps.version.outputs.version }}
+
+      - name: Smoke test image (Python version + imports)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          IMAGE: ghcr.io/isi07/somfy-rts:${{ steps.version.outputs.version }}-${{ matrix.arch }}
+          PLATFORM: linux/${{ matrix.arch }}
+          CHECK: >-
+            import sys, aiohttp, paho.mqtt, serial, somfy_rts.main;
+            print(sys.executable, sys.version);
+            print("aiohttp", aiohttp.__version__)
+        run: docker run --rm --platform "$PLATFORM" --entrypoint python3 "$IMAGE" -c "$CHECK"
 
   manifest:
     name: Create multi-arch manifest
