@@ -23,6 +23,9 @@ from typing import Optional
 _LOG_FILE = "/share/somfy_rts/rts_frames.log"
 _LOG_FILE_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
 _LOG_FILE_BACKUP_COUNT = 3
+# Identifies our own stdout handler — other handlers (e.g. pytest's log capture)
+# may be attached to the same logger and must not suppress it.
+_STDOUT_HANDLER_NAME = "somfy_rts_frames_stdout"
 
 # Module-level singleton — None until init() is called
 rts_logger: Optional["RTSLogger"] = None
@@ -43,8 +46,9 @@ class RTSLogger:
         # Prevent double-printing when root logger also has a StreamHandler
         self._logger.propagate = False
 
-        if not self._logger.handlers:
+        if not any(h.get_name() == _STDOUT_HANDLER_NAME for h in self._logger.handlers):
             stdout_handler = logging.StreamHandler(sys.stdout)
+            stdout_handler.set_name(_STDOUT_HANDLER_NAME)
             stdout_handler.setLevel(logging.DEBUG)
             stdout_handler.setFormatter(logging.Formatter("%(message)s"))
             self._logger.addHandler(stdout_handler)

@@ -205,3 +205,22 @@ class TestSingleton:
         logger = RTSLogger()
         frames_logger = logging.getLogger("somfy_rts.frames")
         assert frames_logger.propagate is False
+
+
+class TestHandlerSetup:
+    """A foreign handler on the frames logger must not suppress stdout output."""
+
+    def test_stdout_handler_added_despite_foreign_handler(self, capsys):
+        from somfy_rts.rts_logger import RTSLogger
+
+        frames_logger = logging.getLogger("somfy_rts.frames")
+        frames_logger.addHandler(logging.NullHandler())  # e.g. pytest log capture
+        RTSLogger(log_format="text").log_connect("/dev/ttyACM0", 9600)
+        assert "GATEWAY_CONNECT" in capsys.readouterr().out
+
+    def test_no_duplicate_stdout_handler(self, capsys):
+        from somfy_rts.rts_logger import RTSLogger
+
+        RTSLogger(log_format="text")
+        RTSLogger(log_format="text").log_connect("/dev/ttyACM0", 9600)
+        assert capsys.readouterr().out.count("GATEWAY_CONNECT") == 1
