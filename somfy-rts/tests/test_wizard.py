@@ -200,3 +200,18 @@ class TestProgLongAndProgPair:
         from somfy_rts.wizard import PairingWizard
         with pytest.raises(RuntimeError, match="ADDR_READY"):
             PairingWizard(mock_gateway).send_prog_pair()
+
+
+class TestStoreFailure:
+    def test_prog_with_corrupt_store_fails_without_sending(self, tmp_codes_path, mock_gateway):
+        from somfy_rts.rolling_code import RollingCodeStoreError
+        from somfy_rts.wizard import PairingWizard, WizardState
+
+        wiz = PairingWizard(mock_gateway)
+        wiz.start("Test", "shutter")
+        with open(tmp_codes_path, "w", encoding="utf-8") as f:
+            f.write("{broken")
+        with pytest.raises(RollingCodeStoreError):
+            wiz.send_prog_pair()
+        assert wiz.state == WizardState.FAILED
+        mock_gateway.send_raw.assert_not_called()

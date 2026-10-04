@@ -32,11 +32,19 @@ WICHTIG: Rolling Code wird ATOMAR persistiert BEVOR build_rts_sequence()
 """
 
 import logging
+import threading
 from dataclasses import dataclass
 
 from .rolling_code import get_and_increment
 
 logger = logging.getLogger(__name__)
+
+# Serialises rolling-code allocation + Yr{n}/YsA0… transmission across threads
+# (paho MQTT callback thread and aiohttp event loop). Without it the two lines of
+# one command can interleave with another command's lines on the serial port,
+# e.g. Yr1 · Yr14 · Ys(B) · Ys(A) → A would go out with Yr14.
+# Usage: ``with TX_LOCK: seq = build_rts_sequence(...); send each seq.commands``
+TX_LOCK = threading.RLock()
 
 
 @dataclass

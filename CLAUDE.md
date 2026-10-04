@@ -35,6 +35,14 @@
 - Reihenfolge: `RC speichern` → `Yr{n} senden` → `YsA0… senden`
 - **NIEMALS** RC nach dem Senden speichern — bei Stromausfall dazwischen lässt sich der Motor nicht mehr steuern
 - **NIEMALS** direkt in `somfy_codes.json` schreiben ohne `os.replace()`
+- `_save_atomic()` macht `flush` + `fsync` → `os.replace()` → Verzeichnis-`fsync` und wirft bei
+  Fehlern `RollingCodeStoreError` (Subklasse von `OSError`) — **nie** still weitermachen.
+  `get_and_increment()` kehrt dann nicht zurück → es wird **nicht** gesendet.
+- Existiert die Datei, ist aber kaputt/strukturell ungültig, wirft `_load()`
+  `RollingCodeStoreError` (einmalige Kopie `somfy_codes.json.corrupt-<ts>`), statt mit einem
+  leeren Store weiterzumachen. Nur `FileNotFoundError` (Erststart) liefert einen leeren Store.
+- Jeder Load-Modify-Save-Zyklus läuft unter `with store_lock():` (RLock) — paho-Thread und
+  aiohttp-Event-Loop greifen parallel zu.
 
 ```python
 # ❌ FALSCH — RC wird nach dem Senden gespeichert
@@ -55,6 +63,8 @@ gateway.send_raw(telegram)
 - Centralis uno RTS ignoriert Telegramme ohne vorherigen `Yr`-Befehl — **kommentarlos, kein Fehler**
 - `build_rts_sequence()` gibt **immer** `[f"Yr{repeat}", telegram]` zurück — nie nur `[telegram]`
 - `log_rts_frame()` wird **nach** dem `send_raw()`-Loop aufgerufen — `STATUS=OK` bedeutet echt gesendet
+- RC-Vergabe + `send_raw()`-Loop laufen unter `with rts.TX_LOCK:` — sonst können sich `Yr`/`Ys`
+  zweier Befehle aus verschiedenen Threads auf der seriellen Leitung verschränken
 - **repeat-Werte:**
   - `1`  = Normalbefehle (Centralis uno: PFLICHT!)
   - `4`  = PROG Anlern (Motor bereits im Anlernmodus, kurzer Druck reicht)
@@ -66,10 +76,11 @@ gateway.send_raw(telegram)
 gateway.send_raw(telegram)        # Motor ignoriert das Telegramm stillschweigend!
 
 # ✅ RICHTIG — beide Kommandos aus RTSSequence.commands, log NACH dem Senden
-seq = build_rts_sequence(address, action, name)           # repeat=1 (Standard)
-seq = build_rts_sequence(address, "PROG", name, repeat=14)  # PROG Lang
-for cmd in seq.commands:          # [f"Yr{repeat}", "YsA0..."]
-    gateway.send_raw(cmd)
+with TX_LOCK:
+    seq = build_rts_sequence(address, action, name)           # repeat=1 (Standard)
+    # seq = build_rts_sequence(address, "PROG", name, repeat=14)  # PROG Lang
+    for cmd in seq.commands:      # [f"Yr{repeat}", "YsA0..."]
+        gateway.send_raw(cmd)
 log_rts_frame(seq, address, action, success=True)   # erst hier: STATUS=OK ist echt
 ```
 
@@ -530,6 +541,16 @@ Registrierung und Deregistrierung immer dieselben Topics verwenden.
 |-------|---------------------------|
 | A | cover, sensor_rolling_code, sensor_last_command, sensor_device_address, button_prog_long, button_prog_pair |
 | B | button_auf, button_zu, button_stop, sensor_rolling_code, sensor_last_command, button_prog_long, button_prog_pair |
+
+### Fehlerbehandlung `RollingCodeStoreError`
+
+| Aufrufer | Verhalten |
+|----------|-----------|
+| `device._send_rts()` (paho-Thread) | Log `ERROR`, nichts senden, `None` zurück |
+| `wizard._send_prog_telegram()` | Session → `FAILED`, Exception weiterwerfen |
+| REST-API | Middleware `store_error_middleware` (`web/server.py`) → HTTP 503 `{"error", "message"}` |
+| `main.py` beim Start | Log `ERROR`, keine Geräte registrieren, Gateway-Status „Fehler: …" |
+| `mqtt_client._on_message()` | Sicherheitsnetz: jede Handler-Exception wird geloggt, paho-Thread überlebt |
 
 ### Gateway TX-Logging
 

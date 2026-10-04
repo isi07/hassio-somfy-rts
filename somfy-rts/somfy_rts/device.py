@@ -26,7 +26,7 @@ from typing import Any, Dict, Optional
 from .config import DeviceConfig
 from .gateway import BaseGateway, GatewayError
 from .mqtt_client import MQTTClient
-from .rolling_code import get_current
+from .rolling_code import RollingCodeStoreError, get_current
 from . import rts as rts_module
 from .rts import RTSSequence, log_rts_frame
 
@@ -235,21 +235,30 @@ class Device:
         Returns:
             RTSSequence bei Erfolg (enthält frame für raw_frame-Attribut), None bei Fehler.
         """
-        try:
-            seq = rts_module.build_rts_sequence(
-                self._device.address, action, self._device.name, repeat=repeat
-            )
-        except ValueError as e:
-            logger.error("RTS-Protokollfehler bei '%s': %s", self._device.name, e)
-            return None
+        with rts_module.TX_LOCK:
+            try:
+                seq = rts_module.build_rts_sequence(
+                    self._device.address, action, self._device.name, repeat=repeat
+                )
+            except ValueError as e:
+                logger.error("RTS-Protokollfehler bei '%s': %s", self._device.name, e)
+                return None
+            except RollingCodeStoreError as e:
+                logger.error(
+                    "Rolling Code nicht persistiert — '%s' NICHT gesendet: %s",
+                    self._device.name, e,
+                )
+                return None
 
-        try:
-            for cmd in seq.commands:
-                self._gateway.send_raw(cmd)
-        except GatewayError as e:
-            logger.error("Gateway-Fehler bei '%s': %s", self._device.name, e)
-            log_rts_frame(seq, self._device.address, action, success=False, error=str(e))
-            return None
+            try:
+                for cmd in seq.commands:
+                    self._gateway.send_raw(cmd)
+            except GatewayError as e:
+                logger.error("Gateway-Fehler bei '%s': %s", self._device.name, e)
+                log_rts_frame(
+                    seq, self._device.address, action, success=False, error=str(e)
+                )
+                return None
 
         log_rts_frame(seq, self._device.address, action, success=True)
         return seq

@@ -336,6 +336,9 @@ Die Rolling Codes werden in `/data/somfy_codes.json` gespeichert:
 **Nie manuell löschen!** Rolling Codes werden vor dem Senden atomar gespeichert
 (Strom-Ausfallsicherheit). Gelöschte Datei = alle Geräte müssen neu angelernt werden.
 
+Kann der neue Rolling Code nicht gespeichert werden (z. B. Speicher voll), wird
+**nicht gesendet** — der Befehl schlägt mit einer Fehlermeldung im Log fehl.
+
 ---
 
 ## Fehlerbehebung
@@ -357,6 +360,18 @@ Die Rolling Codes werden in `/data/somfy_codes.json` gespeichert:
 - Mosquitto App läuft? **Einstellungen → Apps → Mosquitto**
 - `mqtt_host: core-mosquitto` für das interne HA-Netzwerk korrekt?
 - Zugangsdaten korrekt gesetzt?
+
+### „somfy_codes.json ist beschädigt — Senden gesperrt"
+
+Die Datei existiert, ist aber kein gültiges JSON (oder es fehlt das `devices`-Array).
+Die App überschreibt sie in diesem Fall **nicht** mit leeren Werten, denn dann wären
+alle Motoren desynchronisiert. Stattdessen:
+
+- Beim ersten Erkennen wird eine Kopie als `somfy_codes.json.corrupt-<Zeitstempel>` abgelegt
+- Alle Befehle werden verweigert (Log `ERROR`, Web-UI HTTP 503, Gateway-Status
+  „Fehler: somfy_codes.json beschädigt")
+- Datei manuell reparieren oder aus einem HA-Backup wiederherstellen, danach App neu starten.
+  Im Zweifel die Rolling Codes um **+10** erhöhen.
 
 ### Motor ignoriert Befehle nach ioBroker-Migration
 

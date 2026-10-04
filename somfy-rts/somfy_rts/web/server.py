@@ -9,11 +9,38 @@ from pathlib import Path
 
 from aiohttp import web
 
+from ..rolling_code import RollingCodeStoreError
 from .api import AppContext, routes
 
 STATIC_DIR = Path(__file__).parent / "static"
 
 logger = logging.getLogger(__name__)
+
+
+HTTP_SERVICE_UNAVAILABLE = 503
+
+
+@web.middleware
+async def store_error_middleware(
+    request: web.Request, handler: web.RequestHandler
+) -> web.StreamResponse:
+    """Map RollingCodeStoreError (corrupt/unwritable somfy_codes.json) to HTTP 503.
+
+    Args:
+        request: Incoming request.
+        handler: Next handler in the chain.
+
+    Returns:
+        The handler's response, or a JSON 503 response carrying the error text.
+    """
+    try:
+        return await handler(request)
+    except RollingCodeStoreError as exc:
+        logger.error("API %s %s abgelehnt: %s", request.method, request.path, exc)
+        return web.json_response(
+            {"error": str(exc), "message": str(exc)},
+            status=HTTP_SERVICE_UNAVAILABLE,
+        )
 
 
 def create_app(ctx: AppContext) -> web.Application:
@@ -25,7 +52,7 @@ def create_app(ctx: AppContext) -> web.Application:
     Returns:
         Configured aiohttp Application ready to be served.
     """
-    app = web.Application()
+    app = web.Application(middlewares=[store_error_middleware])
     app["ctx"] = ctx
     app.add_routes(routes)
 

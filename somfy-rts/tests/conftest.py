@@ -10,6 +10,7 @@ def tmp_codes_path(tmp_path, monkeypatch):
     import somfy_rts.rolling_code as rc
     codes_file = tmp_path / "somfy_codes.json"
     monkeypatch.setattr(rc, "CODES_PATH", str(codes_file))
+    monkeypatch.setattr(rc, "_corrupt_backup", None)
     return str(codes_file)
 
 

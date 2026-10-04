@@ -326,3 +326,48 @@ class TestTiltCommands:
         dev._handle_command("MY_DOWN")
         diag_calls = {c.args[1]: c.args[2] for c in mqtt.publish_diagnostic.call_args_list}
         assert diag_calls.get("last_command") == "MY_DOWN"
+
+
+class TestStoreFailure:
+    """A rolling-code persistence error must block transmission and not crash."""
+
+    def test_corrupt_store_sends_nothing(self, tmp_codes_path):
+        with open(tmp_codes_path, "w", encoding="utf-8") as f:
+            f.write("{broken")
+        dev, gw, mqtt = _make_device("shutter", mode="A")
+        dev._handle_command("OPEN")  # must not raise into the MQTT thread
+        gw.send_raw.assert_not_called()
+        mqtt.publish_state.assert_not_called()
+
+
+class TestTransmitLock:
+    """Yr{n} and YsA0… of one command must reach the serial line back to back."""
+
+    def test_parallel_commands_do_not_interleave(self, tmp_codes_path):
+        import threading
+        import time
+
+        sent: list[str] = []
+
+        def slow_send(cmd: str) -> None:
+            sent.append(cmd)
+            time.sleep(0.005)
+
+        devices = []
+        for i in range(4):
+            dev, gw, _ = _make_device("shutter", mode="B", address=f"A0000{i + 1}")
+            gw.send_raw.side_effect = slow_send
+            devices.append(dev)
+
+        threads = [
+            threading.Thread(target=lambda d=d: [d._handle_command("UP") for _ in range(5)])
+            for d in devices
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(sent) == 40
+        for yr, ys in zip(sent[0::2], sent[1::2]):
+            assert yr.startswith("Yr") and ys.startswith("Ys"), sent

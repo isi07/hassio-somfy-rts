@@ -39,8 +39,8 @@ from ..config import Config, DeviceConfig
 from ..device import Device, resolve_rts_action
 from ..gateway import BaseGateway, SimGateway
 from ..mqtt_client import MQTTClient
-from ..rolling_code import _load, _save_atomic, get_current
-from ..rts import build_rts_sequence, log_rts_frame
+from ..rolling_code import _load, _save_atomic, get_current, store_lock
+from ..rts import TX_LOCK, build_rts_sequence, log_rts_frame
 from ..wizard import PairingWizard
 
 routes = web.RouteTableDef()
@@ -272,18 +272,19 @@ async def send_command(request: web.Request) -> web.Response:
     if rts_action != action:
         logger.info("API: %s %s → RTS %s (command_map)", addr, action, rts_action)
 
-    try:
-        seq = build_rts_sequence(addr, rts_action, device.get("name", ""))
-    except ValueError as exc:
-        raise web.HTTPBadRequest(reason=str(exc)) from exc
+    with TX_LOCK:
+        try:
+            seq = build_rts_sequence(addr, rts_action, device.get("name", ""))
+        except ValueError as exc:
+            raise web.HTTPBadRequest(reason=str(exc)) from exc
 
-    try:
-        for cmd in seq.commands:
-            ctx.gateway.send_raw(cmd)
-    except Exception as exc:
-        logger.error("Sendefehler %s → %s: %s", addr, rts_action, exc)
-        log_rts_frame(seq, addr, rts_action, success=False, error=str(exc))
-        raise web.HTTPInternalServerError(reason=str(exc)) from exc
+        try:
+            for cmd in seq.commands:
+                ctx.gateway.send_raw(cmd)
+        except Exception as exc:
+            logger.error("Sendefehler %s → %s: %s", addr, rts_action, exc)
+            log_rts_frame(seq, addr, rts_action, success=False, error=str(exc))
+            raise web.HTTPInternalServerError(reason=str(exc)) from exc
 
     log_rts_frame(seq, addr, rts_action, success=True)
 
@@ -332,18 +333,19 @@ async def _send_prog_with_repeat(
     if not ctx.gateway.is_connected:
         raise web.HTTPServiceUnavailable(reason="Gateway nicht verbunden.")
 
-    try:
-        seq = build_rts_sequence(addr, "PROG", device.get("name", ""), repeat=repeat)
-    except ValueError as exc:
-        raise web.HTTPBadRequest(reason=str(exc)) from exc
+    with TX_LOCK:
+        try:
+            seq = build_rts_sequence(addr, "PROG", device.get("name", ""), repeat=repeat)
+        except ValueError as exc:
+            raise web.HTTPBadRequest(reason=str(exc)) from exc
 
-    try:
-        for cmd in seq.commands:
-            ctx.gateway.send_raw(cmd)
-    except Exception as exc:
-        logger.error("Sendefehler %s → PROG Yr%d: %s", addr, repeat, exc)
-        log_rts_frame(seq, addr, "PROG", success=False, error=str(exc))
-        raise web.HTTPInternalServerError(reason=str(exc)) from exc
+        try:
+            for cmd in seq.commands:
+                ctx.gateway.send_raw(cmd)
+        except Exception as exc:
+            logger.error("Sendefehler %s → PROG Yr%d: %s", addr, repeat, exc)
+            log_rts_frame(seq, addr, "PROG", success=False, error=str(exc))
+            raise web.HTTPInternalServerError(reason=str(exc)) from exc
 
     log_rts_frame(seq, addr, "PROG", success=True)
     logger.info("API: %s → %s (Yr%d) gesendet.", addr, label, repeat)
@@ -419,18 +421,19 @@ async def send_raw_cmd(request: web.Request) -> web.Response:
     if not ctx.gateway.is_connected:
         raise web.HTTPServiceUnavailable(reason="Gateway nicht verbunden.")
 
-    try:
-        seq = build_rts_sequence(addr, command, device.get("name", ""), repeat=repeat)
-    except ValueError as exc:
-        raise web.HTTPBadRequest(reason=str(exc)) from exc
+    with TX_LOCK:
+        try:
+            seq = build_rts_sequence(addr, command, device.get("name", ""), repeat=repeat)
+        except ValueError as exc:
+            raise web.HTTPBadRequest(reason=str(exc)) from exc
 
-    try:
-        for cmd in seq.commands:
-            ctx.gateway.send_raw(cmd)
-    except Exception as exc:
-        logger.error("Sendefehler %s → %s Yr%d: %s", addr, command, repeat, exc)
-        log_rts_frame(seq, addr, command, success=False, error=str(exc))
-        raise web.HTTPInternalServerError(reason=str(exc)) from exc
+        try:
+            for cmd in seq.commands:
+                ctx.gateway.send_raw(cmd)
+        except Exception as exc:
+            logger.error("Sendefehler %s → %s Yr%d: %s", addr, command, repeat, exc)
+            log_rts_frame(seq, addr, command, success=False, error=str(exc))
+            raise web.HTTPInternalServerError(reason=str(exc)) from exc
 
     log_rts_frame(seq, addr, command, success=True)
     logger.info("API raw-cmd: %s → %s Yr%d gesendet.", addr, command, repeat)
@@ -444,28 +447,29 @@ async def delete_device(request: web.Request) -> web.Response:
     """Remove a device from somfy_codes.json and clear its HA Discovery topics."""
     ctx: AppContext = request.app["ctx"]
     addr = request.match_info["id"].upper()
-    store = _load()
-    devices = store.get("devices", [])
-    device_dict = next(
-        (d for d in devices if d.get("address", "").upper() == addr),
-        None,
-    )
-    if device_dict is None:
-        raise web.HTTPNotFound(reason=f"Gerät {addr} nicht gefunden.")
-
-    # Clear MQTT Discovery topics before removing from the store
-    if ctx.mqtt_client is not None:
-        device_cfg = DeviceConfig(
-            name=device_dict.get("name", addr),
-            type=device_dict.get("device_type", "shutter"),
-            address=addr,
-            mode=device_dict.get("mode", "A"),
+    with store_lock():
+        store = _load()
+        devices = store.get("devices", [])
+        device_dict = next(
+            (d for d in devices if d.get("address", "").upper() == addr),
+            None,
         )
-        ctx.mqtt_client.unregister_device(device_cfg)
+        if device_dict is None:
+            raise web.HTTPNotFound(reason=f"Gerät {addr} nicht gefunden.")
 
-    remaining = [d for d in devices if d.get("address", "").upper() != addr]
-    store["devices"] = remaining
-    _save_atomic(store)
+        # Clear MQTT Discovery topics before removing from the store
+        if ctx.mqtt_client is not None:
+            device_cfg = DeviceConfig(
+                name=device_dict.get("name", addr),
+                type=device_dict.get("device_type", "shutter"),
+                address=addr,
+                mode=device_dict.get("mode", "A"),
+            )
+            ctx.mqtt_client.unregister_device(device_cfg)
+
+        remaining = [d for d in devices if d.get("address", "").upper() != addr]
+        store["devices"] = remaining
+        _save_atomic(store)
 
     if ctx.mqtt_client is not None:
         ctx.mqtt_client.update_device_count(len(remaining))

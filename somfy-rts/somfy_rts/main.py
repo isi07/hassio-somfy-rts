@@ -10,6 +10,7 @@ from .config import DeviceConfig, load_config
 from .device import Device
 from .gateway import CULGateway, GatewayError, SimGateway
 from .mqtt_client import MQTTClient
+from .rolling_code import RollingCodeStoreError
 from .rolling_code import _load as load_codes
 from .rts_logger import init as init_rts_logger
 from .web.api import AppContext
@@ -39,7 +40,15 @@ async def _async_main() -> None:
 
     init_rts_logger(log_format=config.log_format, file_logging=config.file_logging)
 
-    store = load_codes()
+    # A corrupt store must never be replaced: keep running (Web UI shows the
+    # error), register no devices, and let every send fail until it is repaired.
+    store_error = ""
+    try:
+        store = load_codes()
+    except RollingCodeStoreError as e:
+        store_error = str(e)
+        logger.error("%s", store_error)
+        store = {"devices": []}
     device_count = len(store.get("devices", []))
     logger.info("Found %d device(s) in somfy_codes.json.", device_count)
 
@@ -91,6 +100,8 @@ async def _async_main() -> None:
         sys.exit(1)
 
     mqtt_client.register_gateway(gateway.port_name, device_count)
+    if store_error:
+        mqtt_client.update_gateway_status("Fehler: somfy_codes.json beschädigt")
 
     # Publish MQTT Discovery for all existing devices
     devices: list[Device] = []

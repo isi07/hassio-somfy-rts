@@ -563,7 +563,12 @@ class MQTTClient:
         logger.debug("MQTT RX [%s]: %s", topic, payload)
         handler = self._handlers.get(topic)
         if handler:
-            handler(payload)
+            # Safety net at the thread boundary: an exception escaping here would
+            # terminate paho's network loop thread and silently stop all commands.
+            try:
+                handler(payload)
+            except Exception:  # noqa: BLE001
+                logger.exception("Fehler im Handler für Topic %s", topic)
         else:
             logger.warning("Kein Handler für Topic: %s", topic)
 

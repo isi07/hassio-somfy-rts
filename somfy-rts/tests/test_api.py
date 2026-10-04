@@ -907,3 +907,33 @@ class TestRawCmd:
         assert data["address"] == "A00020"
         assert data["command"] == "PROG"
         assert data["repeat"] == 4
+
+
+# ---------- Corrupt somfy_codes.json ----------
+
+
+async def test_corrupt_store_blocks_command_with_503(client, ctx, tmp_codes_path):
+    """A corrupt store must yield 503 and transmit nothing."""
+    with open(tmp_codes_path, "w", encoding="utf-8") as f:
+        f.write("{broken")
+    resp = await client.post("/api/devices/A00001/cmd", json={"action": "OPEN"})
+    assert resp.status == 503
+    assert ctx.gateway.sent_commands == []
+
+
+async def test_corrupt_store_get_devices_503(client, tmp_codes_path):
+    with open(tmp_codes_path, "w", encoding="utf-8") as f:
+        f.write("{broken")
+    resp = await client.get("/api/devices")
+    assert resp.status == 503
+    data = await resp.json()
+    assert "beschädigt" in data["error"]
+
+
+async def test_corrupt_store_delete_does_not_overwrite(client, tmp_codes_path):
+    with open(tmp_codes_path, "w", encoding="utf-8") as f:
+        f.write("{broken")
+    resp = await client.delete("/api/devices/A00001")
+    assert resp.status == 503
+    with open(tmp_codes_path, encoding="utf-8") as f:
+        assert f.read() == "{broken"

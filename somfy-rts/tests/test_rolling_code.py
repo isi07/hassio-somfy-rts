@@ -95,3 +95,143 @@ class TestOverflow:
         rc_module.get_and_increment("A00001")  # → (0xFFFF, 0)
         _, result = rc_module.get_and_increment("A00001")  # → (0, 1)
         assert result == 1
+
+
+class TestSaveFailure:
+    """(a) A failed write must abort — never return a code that was not persisted."""
+
+    def test_write_error_raises(self, tmp_codes_path, monkeypatch):
+        import os
+
+        import somfy_rts.rolling_code as rc
+
+        def _fail(src: str, dst: str) -> None:
+            raise OSError("disk full")
+
+        monkeypatch.setattr(os, "replace", _fail)
+        with pytest.raises(rc.RollingCodeStoreError):
+            rc.get_and_increment("A00001")
+
+    def test_write_error_leaves_no_tmp_file(self, tmp_codes_path, monkeypatch):
+        import os
+
+        import somfy_rts.rolling_code as rc
+
+        monkeypatch.setattr(os, "replace", lambda s, d: (_ for _ in ()).throw(OSError("x")))
+        with pytest.raises(rc.RollingCodeStoreError):
+            rc.get_and_increment("A00001")
+        leftovers = [p for p in os.listdir(os.path.dirname(tmp_codes_path))
+                     if p.endswith(".tmp")]
+        assert leftovers == []
+
+    def test_previous_code_kept_after_write_error(self, tmp_codes_path, monkeypatch):
+        import os
+
+        import somfy_rts.rolling_code as rc
+
+        rc.get_and_increment("A00001")  # RC=1 persisted
+        real_replace = os.replace
+        monkeypatch.setattr(os, "replace", lambda s, d: (_ for _ in ()).throw(OSError("x")))
+        with pytest.raises(rc.RollingCodeStoreError):
+            rc.get_and_increment("A00001")
+        monkeypatch.setattr(os, "replace", real_replace)
+        assert rc.get_current("A00001") == 1
+
+    def test_fsync_called_before_replace(self, tmp_codes_path, monkeypatch):
+        import os
+
+        import somfy_rts.rolling_code as rc
+
+        calls: list[str] = []
+        real_fsync, real_replace = os.fsync, os.replace
+        monkeypatch.setattr(os, "fsync", lambda fd: (calls.append("fsync"), real_fsync(fd))[1])
+        monkeypatch.setattr(
+            os, "replace", lambda s, d: (calls.append("replace"), real_replace(s, d))[1]
+        )
+        rc.get_and_increment("A00001")
+        assert calls.index("fsync") < calls.index("replace")
+
+
+class TestCorruptStore:
+    """(c) A corrupt file must never be silently replaced by an empty store."""
+
+    def _write(self, path: str, text: str) -> None:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+
+    def test_missing_file_still_initialises(self, tmp_codes_path):
+        from somfy_rts.rolling_code import get_and_increment
+        assert get_and_increment("A00001") == (0, 1)
+
+    @pytest.mark.parametrize("content", ["{not json", "", "[]", '{"devices": 5}'])
+    def test_corrupt_file_raises_and_is_not_overwritten(self, tmp_codes_path, content):
+        import somfy_rts.rolling_code as rc
+
+        self._write(tmp_codes_path, content)
+        with pytest.raises(rc.RollingCodeStoreError):
+            rc.get_and_increment("A00001")
+        with open(tmp_codes_path, encoding="utf-8") as f:
+            assert f.read() == content
+
+    def test_corrupt_file_backed_up_once(self, tmp_codes_path):
+        import glob
+
+        import somfy_rts.rolling_code as rc
+
+        self._write(tmp_codes_path, "{broken")
+        for _ in range(3):
+            with pytest.raises(rc.RollingCodeStoreError):
+                rc._load()
+        backups = glob.glob(tmp_codes_path + ".corrupt-*")
+        assert len(backups) == 1
+        with open(backups[0], encoding="utf-8") as f:
+            assert f.read() == "{broken"
+
+    def test_recovers_after_manual_repair(self, tmp_codes_path):
+        import somfy_rts.rolling_code as rc
+
+        self._write(tmp_codes_path, "{broken")
+        with pytest.raises(rc.RollingCodeStoreError):
+            rc._load()
+        self._write(
+            tmp_codes_path,
+            json.dumps({"devices": [{"address": "A00001", "rolling_code": 41}]}),
+        )
+        assert rc.get_and_increment("A00001") == (41, 42)
+
+    def test_store_error_is_oserror(self):
+        from somfy_rts.rolling_code import RollingCodeStoreError
+        assert issubclass(RollingCodeStoreError, OSError)
+
+
+class TestThreadSafety:
+    """(d) Concurrent increments from several threads must not lose updates."""
+
+    def test_parallel_increments_are_unique(self, tmp_codes_path):
+        import threading
+
+        from somfy_rts.rolling_code import get_and_increment, get_current
+
+        results: list[int] = []
+        results_lock = threading.Lock()
+
+        def worker() -> None:
+            for _ in range(20):
+                _, new = get_and_increment("A00001")
+                with results_lock:
+                    results.append(new)
+
+        threads = [threading.Thread(target=worker) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert sorted(results) == list(range(1, 81))
+        assert get_current("A00001") == 80
+
+    def test_store_lock_is_reentrant(self, tmp_codes_path):
+        from somfy_rts.rolling_code import get_and_increment, store_lock
+
+        with store_lock():
+            assert get_and_increment("A00001") == (0, 1)

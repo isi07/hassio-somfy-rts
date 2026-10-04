@@ -25,9 +25,11 @@ from typing import Optional
 
 from .gateway import BaseGateway, GatewayError
 from .rolling_code import (
+    RollingCodeStoreError,
+    _find_or_create_device,
     _load,
     _save_atomic,
-    _find_or_create_device,
+    store_lock,
 )
 from . import rts as rts_module
 from .rts import log_rts_frame
@@ -146,25 +148,28 @@ class PairingWizard:
 
         On GatewayError the session is set to FAILED and the exception re-raised.
         """
-        try:
-            seq = rts_module.build_rts_sequence(
-                self._session.address, "PROG", self._session.name, repeat=repeat
-            )
-        except ValueError as e:
-            self._session.state = WizardState.FAILED
-            self._session.error = str(e)
-            logger.error("Wizard FAILED: PROG Buildfehler: %s", e)
-            raise
+        with rts_module.TX_LOCK:
+            try:
+                seq = rts_module.build_rts_sequence(
+                    self._session.address, "PROG", self._session.name, repeat=repeat
+                )
+            except (ValueError, RollingCodeStoreError) as e:
+                self._session.state = WizardState.FAILED
+                self._session.error = str(e)
+                logger.error("Wizard FAILED: PROG Buildfehler: %s", e)
+                raise
 
-        try:
-            for cmd in seq.commands:
-                self._gateway.send_raw(cmd)
-        except GatewayError as e:
-            self._session.state = WizardState.FAILED
-            self._session.error = str(e)
-            logger.error("Wizard FAILED: PROG Sendefehler: %s", e)
-            log_rts_frame(seq, self._session.address, "PROG", success=False, error=str(e))
-            raise
+            try:
+                for cmd in seq.commands:
+                    self._gateway.send_raw(cmd)
+            except GatewayError as e:
+                self._session.state = WizardState.FAILED
+                self._session.error = str(e)
+                logger.error("Wizard FAILED: PROG Sendefehler: %s", e)
+                log_rts_frame(
+                    seq, self._session.address, "PROG", success=False, error=str(e)
+                )
+                raise
 
         log_rts_frame(seq, self._session.address, "PROG", success=True)
 
@@ -232,14 +237,15 @@ class PairingWizard:
         """
         addr = address.upper()
         mode_upper = mode.upper()
-        store = _load()
-        entry = _find_or_create_device(store, addr, name)
-        entry["rolling_code"] = int(rolling_code)
-        entry["device_type"] = device_type
-        entry["mode"] = mode_upper
-        if name:
-            entry["name"] = name
-        _save_atomic(store)
+        with store_lock():
+            store = _load()
+            entry = _find_or_create_device(store, addr, name)
+            entry["rolling_code"] = int(rolling_code)
+            entry["device_type"] = device_type
+            entry["mode"] = mode_upper
+            if name:
+                entry["name"] = name
+            _save_atomic(store)
 
         logger.info(
             "ioBroker import: '%s' Adresse=%s RC=%d Typ=%s Modus=%s gespeichert.",
@@ -271,33 +277,34 @@ class PairingWizard:
         """Generate next address: <prefix_4hex><sequence_2hex>.
         Prefix comes from config (SOMFY_ADDRESS_PREFIX), not from somfy_codes.json.
         """
-        store = _load()
-        prefix = self._address_prefix
-        devices = store.get("devices", [])
+        with store_lock():
+            store = _load()
+            prefix = self._address_prefix
+            devices = store.get("devices", [])
 
-        # Sequence = number of existing devices + 1, capped at 0xFF
-        sequence = (len(devices) + 1) & 0xFF
-        address = f"{prefix}{sequence:02X}"
-
-        # Ensure uniqueness — increment if already taken
-        existing = {d.get("address", "").upper() for d in devices}
-        while address in existing:
-            sequence = (sequence + 1) & 0xFF
+            # Sequence = number of existing devices + 1, capped at 0xFF
+            sequence = (len(devices) + 1) & 0xFF
             address = f"{prefix}{sequence:02X}"
 
-        # Lock prefix directly in store (avoids a second load/save cycle that
-        # would overwrite the device entry we're about to add below)
-        settings = store.setdefault("settings", {})
-        if not settings.get("prefix_locked", False):
-            settings["address_prefix"] = prefix
-            settings["prefix_locked"] = True
+            # Ensure uniqueness — increment if already taken
+            existing = {d.get("address", "").upper() for d in devices}
+            while address in existing:
+                sequence = (sequence + 1) & 0xFF
+                address = f"{prefix}{sequence:02X}"
 
-        # Pre-create entry with RC=0 so it's present even before send_prog()
-        entry = _find_or_create_device(store, address, name)
-        entry["rolling_code"] = 0
-        entry["device_type"] = self._session.device_type
-        entry["mode"] = self._session.mode
-        _save_atomic(store)
+            # Lock prefix directly in store (avoids a second load/save cycle that
+            # would overwrite the device entry we're about to add below)
+            settings = store.setdefault("settings", {})
+            if not settings.get("prefix_locked", False):
+                settings["address_prefix"] = prefix
+                settings["prefix_locked"] = True
+
+            # Pre-create entry with RC=0 so it's present even before send_prog()
+            entry = _find_or_create_device(store, address, name)
+            entry["rolling_code"] = 0
+            entry["device_type"] = self._session.device_type
+            entry["mode"] = self._session.mode
+            _save_atomic(store)
 
         return address
 

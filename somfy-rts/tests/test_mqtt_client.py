@@ -295,3 +295,19 @@ class TestStateTopics:
         slug = device_a.slug
         for topic in state_topics(device_a):
             assert f"{MQTT_TOPIC_PREFIX}/{slug}/" in topic
+
+
+class TestOnMessageSafetyNet:
+    def test_handler_exception_does_not_propagate(self):
+        """An exception in a command handler must not kill the paho loop thread."""
+        from unittest.mock import MagicMock
+
+        from somfy_rts.config import Config
+        from somfy_rts.mqtt_client import MQTTClient
+
+        client = MQTTClient(Config())
+        client._handlers["somfy/x/set"] = MagicMock(side_effect=RuntimeError("boom"))
+        msg = MagicMock()
+        msg.topic = "somfy/x/set"
+        msg.payload = b"OPEN"
+        client._on_message(MagicMock(), None, msg)  # must not raise
