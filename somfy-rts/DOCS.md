@@ -132,9 +132,10 @@ Der Motor muss sich in Reichweite des NanoCUL befinden (~30 m Freifeld).
 2. **Motor in den Anlernmodus versetzen** — eine der beiden Varianten:
    - **Original-Fernbedienung:** `PROG`-Taste **ca. 3 Sekunden** halten, bis der Motor
      kurz auf und ab fährt
-   - **Im Wizard:** **⏱ Motor in Anlernmodus** (PROG Lang). Hinweis: Somfy-Motoren
-     reagieren auf einen langen PROG-Druck normalerweise nur von einem bereits angelernten
-     Sender — bei einem neuen Gerät im Zweifel die Original-Fernbedienung verwenden
+   - **Über ein bereits angelerntes Gerät der App:** Steuert die App diesen Motor schon
+     (z. B. über ein anderes Gerät mit eigener Adresse), in der Geräteliste bei diesem
+     Gerät **⏱ PROG Lang** drücken. Das wirkt wie das Halten der PROG-Taste — aber nur
+     von einem Sender, den der Motor bereits kennt; von der neuen Adresse aus wirkt es nicht
 
 3. **PROG senden**
    **📡 PROG senden** lernt den virtuellen Sender der App am Motor an
