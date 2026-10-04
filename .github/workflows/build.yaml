@@ -23,23 +23,19 @@ jobs:
           python-version: "3.14"  # keep in sync with BUILD_FROM below
 
       - name: Install dependencies
-        run: |
-          # Pinned: ruff 0.16 enables additional default rules (UP, RUF, BLE, ...)
-          pip install "ruff==0.15.10"
-          pip install -r somfy-rts/requirements.txt
+        # Runtime deps + pinned test/lint tooling (ruff, yamllint, pytest, ...)
+        run: pip install -r somfy-rts/requirements-test.txt
 
       - name: Run ruff
         run: ruff check somfy-rts/somfy_rts/
 
       - name: Run tests
         run: |
-          pip install -r somfy-rts/requirements-test.txt
           cd somfy-rts
           pytest tests/ -v
 
       - name: Lint YAML
         run: |
-          pip install yamllint
           yamllint .github/workflows/build.yaml
           yamllint somfy-rts/config.yaml
 
@@ -74,7 +70,8 @@ jobs:
 
       - name: Lint GitHub Actions workflow
         run: |
-          bash <(curl -s https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          script="https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash"
+          bash <(curl -s "$script") 1.7.12
           ./actionlint .github/workflows/build.yaml
 
   build:

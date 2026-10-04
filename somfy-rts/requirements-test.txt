@@ -1,6 +1,9 @@
-pytest>=7.0
-pytest-asyncio>=0.21
-pytest-aiohttp>=1.0
-pytest-mock>=3.0
-pyserial>=3.5
-aiohttp>=3.9
+# Test and lint tooling for CI and local development — pinned exactly.
+# Includes the runtime dependencies so tests run against the same versions as the image.
+-r requirements.txt
+pytest==9.1.1
+pytest-asyncio==1.4.0
+pytest-aiohttp==1.1.1
+pytest-mock==3.16.0
+ruff==0.15.10
+yamllint==1.38.0

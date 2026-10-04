@@ -6,13 +6,22 @@ updates:
       interval: "weekly"
     labels:
       - "dependencies"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
 
-  # Python dependencies of the add-on (requirements.txt, requirements-test.txt).
-  # The Docker base image is passed via BUILD_FROM in build.yaml and is therefore
-  # not visible to Dependabot's docker ecosystem — update it manually.
+  # Python dependencies (requirements.txt = image, requirements-test.txt = CI tooling).
+  # All pinned exactly; one grouped PR per week, validated by lint, tests, image
+  # build and smoke test. The Docker base image is passed via BUILD_FROM in
+  # build.yaml and is therefore not visible to Dependabot — update it manually.
   - package-ecosystem: "pip"
     directory: "/somfy-rts"
     schedule:
       interval: "weekly"
     labels:
       - "dependencies"
+    groups:
+      python:
+        patterns:
+          - "*"

@@ -131,7 +131,7 @@ Jalousien usw.) über einen **NanoCUL USB-Stick** mit **culfw-Firmware** via **M
 | Web-UI | aiohttp (asyncio), HA Ingress Port 8099 |
 | HA-Integration | MQTT Discovery (Cover/Light/Switch/Button/Sensor-Entitäten) |
 | Config | App-Options → `run.sh` → `SOMFY_*` Env-Variablen → `config.py` |
-| Abhängigkeiten | `requirements.txt` (nicht gepinnt: pyserial, paho-mqtt, aiohttp) |
+| Abhängigkeiten | Exakt gepinnt (`==`): `requirements.txt` (Image: pyserial, paho-mqtt, aiohttp), `requirements-test.txt` (`-r requirements.txt` + pytest, ruff, yamllint) |
 | Versionierung | Conventional Commits + git-cliff + semver Tags |
 
 ---
@@ -510,9 +510,9 @@ Vollständige YAML-Beispiele für Modus A und Modus B in **DOCS.md**.
 
 Workflow `.github/workflows/build.yaml`, Job-Kette `lint → build → manifest → release`:
 
-- **lint** (jeder Push auf `main`, jeder PR, jeder Tag): ruff (gepinnt auf `0.15.10` —
-  lokal dieselbe Version verwenden; ab 0.16 gelten zusätzliche Standardregeln), **pytest**, yamllint,
-  shellcheck, hadolint, JSON-Check, HA-Add-on-Linter, actionlint
+- **lint** (jeder Push auf `main`, jeder PR, jeder Tag): installiert `requirements-test.txt`,
+  dann ruff, **pytest**, yamllint, shellcheck, hadolint, JSON-Check, HA-Add-on-Linter,
+  actionlint (Version im Workflow gepinnt). Tool-Versionen nur über `requirements-test.txt` ändern
 - **build** (immer, Matrix amd64/aarch64): baut das Image — bei PR/`main` nur als Check plus
   Smoke-Test (Container starten, Python-Version + Imports prüfen), Login + Push nach ghcr.io
   **nur bei Tag `v*`**. So testen auch Dependabot-PRs die Docker-Actions und das Image
@@ -522,9 +522,11 @@ Workflow `.github/workflows/build.yaml`, Job-Kette `lint → build → manifest 
 - **Conventional Commits:** `feat:`, `fix:`, `perf:`, `refactor:`, `docs:`, `chore:`, `ci:`, `test:`
   (`chore: release …` wird im Changelog ausgeblendet)
 - **Tag-Format:** `v0.1.0` (stable), `v0.1.0-beta.1` (pre-release)
-- **Dependabot** (`.github/dependabot.yaml`): wöchentliche PRs für GitHub Actions und pip
-  (`somfy-rts/requirements*.txt`). Einzeln mergen, erst wenn lint **und** build grün sind;
-  nicht zusammen mit einem Release. Basis-Image (BUILD_FROM in `build.yaml`) sieht Dependabot nicht
+- **Dependabot** (`.github/dependabot.yaml`): wöchentlich je **ein** gruppierter PR für GitHub
+  Actions und für pip (`somfy-rts/requirements*.txt`). Mergen erst, wenn lint **und** build
+  (inkl. Smoke-Test) grün sind; nicht zusammen mit einem Release. Ein rotes Paket blockiert die
+  Gruppe → Ursache fixen oder Paket per `ignore` zurückstellen. Basis-Image (BUILD_FROM in
+  `build.yaml`) sieht Dependabot nicht — manuell prüfen
 
 ---
 
@@ -794,6 +796,7 @@ der fehlerhaften Commits und neue Patch-Version releasen.
 
 ## Entwicklungs-Hinweise
 
+- Setup: `pip install -r somfy-rts/requirements-test.txt` (gleiche Versionen wie CI)
 - Tests: `cd somfy-rts && pytest` (Fixture `tmp_codes_path` isoliert `somfy_codes.json`)
 - Lokaler Lauf ohne Hardware (aus `somfy-rts/`):
   `SOMFY_SIMULATION_MODE=true SOMFY_CODES_PATH=./test_codes.json python -m somfy_rts.main`
