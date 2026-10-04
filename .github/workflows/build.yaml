@@ -20,7 +20,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.14"  # keep in sync with BUILD_FROM below
+          python-version: "3.14"  # keep in sync with FROM in somfy-rts/Dockerfile
 
       - name: Install dependencies
         # Runtime deps + pinned test/lint tooling (ruff, yamllint, pytest, ...)
@@ -38,15 +38,6 @@ jobs:
         run: |
           yamllint .github/workflows/build.yaml
           yamllint somfy-rts/config.yaml
-
-      - name: Lint JavaScript
-        run: |
-          npm install -g eslint@8
-          eslint somfy-rts/somfy_rts/web/static/*.js \
-            --env browser,es2021 \
-            --rule '{"no-unused-vars": "warn", "no-undef": "warn"}' \
-            --no-eslintrc \
-            || true
 
       - name: Lint Shell
         run: |
@@ -95,6 +86,7 @@ jobs:
         id: version
         run: |
           echo "version=$(grep '^version:' somfy-rts/config.yaml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
       - name: Login to ghcr.io
         if: startsWith(github.ref, 'refs/tags/v')
@@ -121,8 +113,10 @@ jobs:
           load: ${{ !startsWith(github.ref, 'refs/tags/v') }}
           tags: ghcr.io/isi07/somfy-rts:${{ steps.version.outputs.version }}-${{ matrix.arch }}
           build-args: |
-            BUILD_FROM=ghcr.io/home-assistant/${{ matrix.arch }}-base-python:3.14-alpine3.24
             BUILD_VERSION=${{ steps.version.outputs.version }}
+            BUILD_ARCH=${{ matrix.arch }}
+            BUILD_DATE=${{ steps.version.outputs.date }}
+            BUILD_REF=${{ github.sha }}
 
       - name: Smoke test image (Python version + imports)
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
@@ -130,10 +124,12 @@ jobs:
           IMAGE: ghcr.io/isi07/somfy-rts:${{ steps.version.outputs.version }}-${{ matrix.arch }}
           PLATFORM: linux/${{ matrix.arch }}
           CHECK: >-
-            import sys, aiohttp, paho.mqtt, serial, somfy_rts.main;
-            print(sys.executable, sys.version);
+            import platform, sys, aiohttp, paho.mqtt, serial, somfy_rts.main;
+            print(platform.machine(), sys.executable, sys.version);
             print("aiohttp", aiohttp.__version__)
-        run: docker run --rm --platform "$PLATFORM" --entrypoint python3 "$IMAGE" -c "$CHECK"
+        run: |
+          docker run --rm --platform "$PLATFORM" --entrypoint python3 "$IMAGE" -c "$CHECK"
+          docker inspect --format '{{ json .Config.Labels }}' "$IMAGE"
 
   manifest:
     name: Create multi-arch manifest

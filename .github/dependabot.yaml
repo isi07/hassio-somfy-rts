@@ -13,8 +13,7 @@ updates:
 
   # Python dependencies (requirements.txt = image, requirements-test.txt = CI tooling).
   # All pinned exactly; one grouped PR per week, validated by lint, tests, image
-  # build and smoke test. The Docker base image is passed via BUILD_FROM in
-  # build.yaml and is therefore not visible to Dependabot — update it manually.
+  # build and smoke test.
   - package-ecosystem: "pip"
     directory: "/somfy-rts"
     schedule:
@@ -25,3 +24,12 @@ updates:
       python:
         patterns:
           - "*"
+
+  # Home Assistant base image (FROM in somfy-rts/Dockerfile, dated release tag).
+  # A new Python minor version also needs setup-python (build.yaml) and ruff.toml.
+  - package-ecosystem: "docker"
+    directory: "/somfy-rts"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"

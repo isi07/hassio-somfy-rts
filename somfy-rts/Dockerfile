@@ -1,5 +1,7 @@
-ARG BUILD_FROM
-FROM ${BUILD_FROM}
+# Home Assistant multi-arch base image (amd64 + arm64), pinned to a dated release.
+# Dependabot (docker ecosystem) proposes updates. Keep the Python minor version in
+# sync with setup-python in .github/workflows/build.yaml and ruff.toml.
+FROM ghcr.io/home-assistant/base-python:3.14-alpine3.24-2026.08.0
 
 # Override S6-Overlay entrypoint from base image — run.sh directly
 ENTRYPOINT ["/run.sh"]

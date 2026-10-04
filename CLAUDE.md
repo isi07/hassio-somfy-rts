@@ -123,9 +123,9 @@ Jalousien usw.) über einen **NanoCUL USB-Stick** mit **culfw-Firmware** via **M
 
 | Komponente | Details |
 |---|---|
-| App Runtime | Docker, Basis `ghcr.io/home-assistant/{arch}-base-python:3.14-alpine3.24` (Build-Arg `BUILD_FROM` in `build.yaml`) |
+| App Runtime | Docker, Multi-Arch-Basis `ghcr.io/home-assistant/base-python:3.14-alpine3.24-<release>` (datierter Tag, `FROM` direkt im Dockerfile) |
 | Architekturen | amd64, aarch64 |
-| Sprache | Python 3.14 (CI-Tests `setup-python` und `BUILD_FROM` immer gleich halten) |
+| Sprache | Python 3.14 — Python-Minor in `FROM` (Dockerfile), `setup-python` (build.yaml) und `ruff.toml` immer gleich halten |
 | Protokoll | Somfy RTS (433,42 MHz) über NanoCUL USB (culfw) |
 | Kommunikation | MQTT (paho-mqtt 2.x, **Callback API v2**, Thread-Modus `loop_start`, Auto-Reconnect) → Home Assistant |
 | Web-UI | aiohttp (asyncio), HA Ingress Port 8099 |
@@ -139,6 +139,9 @@ Jalousien usw.) über einen **NanoCUL USB-Stick** mit **culfw-Firmware** via **M
 ## Hardware
 
 - **NanoCUL USB-Stick** mit culfw-Firmware (**433,42 MHz** — nicht 433.92!)
+- Firmware muss mit **`HAS_SOMFY_RTS`** gebaut sein (im a-culfw-Standard-Build für den
+  nanoCUL deaktiviert) — ohne werden `Ys…`-Befehle kommentarlos ignoriert
+- culfw kann Somfy RTS nur **senden**, nicht empfangen (kein Somfy-Decoder in culfw/a-culfw)
 - Kommunikation über serielle Schnittstelle (z.B. `/dev/ttyACM0`), 9600 Baud
 - Sendet RTS-Telegramme; **Checksumme und Verschlüsselung übernimmt culfw intern**
 
@@ -523,10 +526,12 @@ Workflow `.github/workflows/build.yaml`, Job-Kette `lint → build → manifest 
   (`chore: release …` wird im Changelog ausgeblendet)
 - **Tag-Format:** `v0.1.0` (stable), `v0.1.0-beta.1` (pre-release)
 - **Dependabot** (`.github/dependabot.yaml`): wöchentlich je **ein** gruppierter PR für GitHub
-  Actions und für pip (`somfy-rts/requirements*.txt`). Mergen erst, wenn lint **und** build
-  (inkl. Smoke-Test) grün sind; nicht zusammen mit einem Release. Ein rotes Paket blockiert die
-  Gruppe → Ursache fixen oder Paket per `ignore` zurückstellen. Basis-Image (BUILD_FROM in
-  `build.yaml`) sieht Dependabot nicht — manuell prüfen
+  Actions und für pip (`somfy-rts/requirements*.txt`), dazu Docker für das Basis-Image (`FROM`
+  im Dockerfile). Mergen erst, wenn lint **und** build (inkl. Smoke-Test) grün sind; nicht
+  zusammen mit einem Release. Ein rotes Paket blockiert die Gruppe → Ursache fixen oder Paket
+  per `ignore` zurückstellen. Bei einem neuen Python-Minor im Basis-Image auch `setup-python`
+  und `ruff.toml` anpassen
+- **Image-Labels:** build übergibt `BUILD_VERSION`, `BUILD_ARCH`, `BUILD_DATE`, `BUILD_REF`
 
 ---
 
@@ -651,7 +656,9 @@ aktualisiert werden:
   Konfigurationsfeldern, Workflows
 - **somfy-rts/DOCS.md** — bei Änderungen an `config.yaml`-Optionen,
   neuen Features, Anlern-Prozess, Template Cover
-- **README.md** — bei neuen Features oder geänderten Installationsschritten
+- **README.md** — bei neuen Features oder geänderten Installationsschritten; **keine fest
+  eingetragenen Versionsnummern** (veralten — Release-Badge und CHANGELOG zeigen die Version)
+- **Web-UI-Texte** (`web/static/*.html`) — wenn sich Abläufe oder Begriffe ändern
 - **somfy-rts/CHANGELOG.md** — wird automatisch via git-cliff generiert,
   **NICHT manuell bearbeiten**
 
