@@ -297,6 +297,19 @@ BaseGateway (ABC)          # gateway.py
 - Beide greifen auf `somfy_codes.json` und die serielle Schnittstelle zu →
   `store_lock()` und `rts.TX_LOCK` (siehe Kritische Invarianten)
 
+### MQTT-Verbindung
+
+- `MQTTClient.connect()` startet nur im Hintergrund (`connect_async` + `loop_start`),
+  blockiert nicht und wirft keine Netzwerkfehler. paho wiederholt Erst-Verbindung **und**
+  Reconnects mit Backoff `RECONNECT_MIN_DELAY_S`..`RECONNECT_MAX_DELAY_S` (1..60 s)
+- `main.wait_for_mqtt()` wartet auf `is_connected` (oder Shutdown) — erst danach Discovery,
+  denn QoS-0-Publishes ohne Verbindung verwirft paho
+- Logging: `_on_connect_fail` (WARNING je Fehlversuch), `_on_disconnect` (WARNING bei
+  Abbruch), `_on_connect` (ERROR bei abgelehnter Anmeldung, INFO mit Ausfalldauer und
+  Fehlversuchen nach Wiederverbindung)
+- Nach einem Reconnect werden alle Command-Topics neu abonniert und `online` publiziert.
+  Discovery wird **nicht** neu gesendet (liegt retained beim Broker)
+
 ### MQTT Discovery Struktur
 
 **Gateway-Device** (`identifiers: ["somfy_rts_gateway"]`):

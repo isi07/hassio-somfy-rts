@@ -399,6 +399,19 @@ Kann der neue Rolling Code nicht gespeichert werden (z. B. Speicher voll), wird
 - `mqtt_host: core-mosquitto` für das interne HA-Netzwerk korrekt?
 - Zugangsdaten korrekt gesetzt?
 
+Die App bricht bei MQTT-Problemen **nicht** ab, sondern verbindet sich selbstständig neu —
+beim Start (z. B. wenn Mosquitto nach einem HA-Neustart später hochkommt) und im laufenden
+Betrieb. Wartezeit zwischen den Versuchen: anfangs 1 s, wachsend bis höchstens 60 s.
+Meldungen im App-Log:
+
+| Meldung | Bedeutung |
+|---|---|
+| `Warte auf Verbindung zum MQTT-Broker …` | Start: Geräte werden erst nach dem Verbinden in HA angemeldet |
+| `MQTT-Broker <host:port> nicht erreichbar (Versuch N) …` (WARNING) | Broker antwortet nicht — neuer Versuch folgt |
+| `MQTT-Broker <host:port> lehnt die Verbindung ab: … — Zugangsdaten prüfen` (ERROR) | Benutzer/Passwort falsch oder nicht berechtigt |
+| `MQTT-Verbindung verloren: … — automatischer Reconnect` (WARNING) | Verbindung im Betrieb abgerissen |
+| `MQTT wieder verbunden nach X s (N fehlgeschlagene Versuche)` | Verbindung wiederhergestellt, Befehle kommen wieder an |
+
 ### „somfy_codes.json ist beschädigt — Senden gesperrt"
 
 Die Datei existiert, ist aber kein gültiges JSON (oder es fehlt das `devices`-Array).

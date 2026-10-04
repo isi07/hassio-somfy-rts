@@ -44,6 +44,11 @@ logger = logging.getLogger(__name__)
 HA_DISCOVERY = "homeassistant"
 LWT_TOPIC = "cul2mqtt/status"
 GW_TOPIC_BASE = "cul2mqtt/gateway"
+
+# paho retries (re)connects with exponential backoff between these bounds (seconds)
+RECONNECT_MIN_DELAY_S = 1
+RECONNECT_MAX_DELAY_S = 60
+MQTT_KEEPALIVE_S = 60
 MQTT_TOPIC_PREFIX = "somfy"
 
 ORIGIN = {
@@ -74,6 +79,10 @@ class MQTTClient:
             clean_session=True,
         )
         self._handlers: dict[str, Callable[[str], None]] = {}
+        # Outage tracking for log messages (paho thread only)
+        self._outage_started: float | None = None
+        self._failed_attempts = 0
+        self._ever_connected = False
 
         if config.mqtt_user:
             self._client.username_pw_set(config.mqtt_user, config.mqtt_password)
@@ -84,29 +93,42 @@ class MQTTClient:
         self._client.on_connect = self._on_connect
         self._client.on_message = self._on_message
         self._client.on_disconnect = self._on_disconnect
+        self._client.on_connect_fail = self._on_connect_fail
 
     # ---------- Verbindung ----------
 
+    @property
+    def broker(self) -> str:
+        """Broker address as "host:port" (for log messages)."""
+        return f"{self._config.mqtt_host}:{self._config.mqtt_port}"
+
+    @property
+    def is_connected(self) -> bool:
+        """True while a broker connection is established."""
+        return self._client.is_connected()
+
     def connect(self) -> None:
-        logger.info("Verbinde mit MQTT %s:%d ...", self._config.mqtt_host, self._config.mqtt_port)
-        self._client.connect(
-            self._config.mqtt_host,
-            self._config.mqtt_port,
-            keepalive=60,
+        """Start connecting in the background — never blocks, never raises on network errors.
+
+        paho's network thread (loop_start) retries the first connect and every later
+        reconnect with exponential backoff (RECONNECT_MIN_DELAY_S..RECONNECT_MAX_DELAY_S).
+        Use is_connected to wait for the connection (see main.wait_for_mqtt).
+        """
+        logger.info("Verbinde mit MQTT %s ...", self.broker)
+        self._client.reconnect_delay_set(
+            min_delay=RECONNECT_MIN_DELAY_S, max_delay=RECONNECT_MAX_DELAY_S
+        )
+        self._client.connect_async(
+            self._config.mqtt_host, self._config.mqtt_port, keepalive=MQTT_KEEPALIVE_S
         )
         self._client.loop_start()
-        deadline = time.time() + 10
-        while not self._client.is_connected() and time.time() < deadline:
-            time.sleep(0.1)
-        if not self._client.is_connected():
-            raise RuntimeError("MQTT Verbindung fehlgeschlagen (Timeout 10s).")
-        self._client.publish(LWT_TOPIC, "online", retain=True)
 
     def disconnect(self) -> None:
+        """Publish 'offline', disconnect cleanly and stop the network thread."""
         self._client.publish(LWT_TOPIC, "offline", retain=True)
         time.sleep(0.2)
-        self._client.loop_stop()
         self._client.disconnect()
+        self._client.loop_stop()
 
     # ---------- Gateway Discovery ----------
 
@@ -569,9 +591,25 @@ class MQTTClient:
             properties: MQTT v5 properties (None for MQTT 3.1.1).
         """
         if reason_code.is_failure:
-            logger.error("MQTT Verbindungsfehler: %s (RC=%d)", reason_code, reason_code.value)
+            self._failed_attempts += 1
+            if self._outage_started is None:
+                self._outage_started = time.monotonic()
+            logger.error(
+                "MQTT-Broker %s lehnt die Verbindung ab: %s (RC=%d) — Zugangsdaten prüfen",
+                self.broker, reason_code, reason_code.value,
+            )
             return
-        logger.info("MQTT verbunden.")
+        if self._outage_started is None:
+            logger.info("MQTT verbunden mit %s.", self.broker)
+        else:
+            logger.info(
+                "MQTT %s nach %.0f s (%d fehlgeschlagene Versuche).",
+                "wieder verbunden" if self._ever_connected else f"verbunden mit {self.broker}",
+                time.monotonic() - self._outage_started, self._failed_attempts,
+            )
+        self._ever_connected = True
+        self._outage_started = None
+        self._failed_attempts = 0
         client.publish(LWT_TOPIC, "online", retain=True)
         for topic in self._handlers:
             client.subscribe(topic)
@@ -594,10 +632,30 @@ class MQTTClient:
             properties: MQTT v5 properties (None for MQTT 3.1.1).
         """
         if reason_code.is_failure:
+            if self._outage_started is None:
+                self._outage_started = time.monotonic()
             logger.warning(
-                "MQTT getrennt: %s (RC=%d) — paho reconnect...",
+                "MQTT-Verbindung verloren: %s (RC=%d) — automatischer Reconnect "
+                "(alle %d–%d s).",
                 reason_code, reason_code.value,
+                RECONNECT_MIN_DELAY_S, RECONNECT_MAX_DELAY_S,
             )
+
+    def _on_connect_fail(self, client: mqtt.Client, userdata: object) -> None:
+        """Log a failed (re)connect attempt; paho retries with backoff.
+
+        Args:
+            client: paho client.
+            userdata: Unused.
+        """
+        self._failed_attempts += 1
+        if self._outage_started is None:
+            self._outage_started = time.monotonic()
+        logger.warning(
+            "MQTT-Broker %s nicht erreichbar (Versuch %d) — neuer Versuch in "
+            "spätestens %d s.",
+            self.broker, self._failed_attempts, RECONNECT_MAX_DELAY_S,
+        )
 
     def _on_message(self, client: mqtt.Client, userdata: object, msg: mqtt.MQTTMessage) -> None:
         topic = msg.topic

@@ -18,6 +18,42 @@ from .web.server import start_server
 
 WEB_HOST = "0.0.0.0"
 WEB_PORT = 8099
+MQTT_WAIT_POLL_S = 0.5
+
+logger = logging.getLogger(__name__)
+
+
+async def wait_for_mqtt(
+    mqtt_client: MQTTClient,
+    shutdown_event: asyncio.Event,
+    poll_s: float = MQTT_WAIT_POLL_S,
+) -> bool:
+    """Wait until the MQTT client is connected or shutdown is requested.
+
+    The connection itself is retried by paho in the background (see
+    MQTTClient.connect); failed attempts are logged there.
+
+    Args:
+        mqtt_client: Client on which connect() has been called.
+        shutdown_event: Set by SIGTERM/SIGINT.
+        poll_s: Polling interval in seconds.
+
+    Returns:
+        True once connected, False if shutdown was requested first.
+    """
+    waiting_logged = False
+    while not mqtt_client.is_connected:
+        if not waiting_logged:
+            logger.info(
+                "Warte auf Verbindung zum MQTT-Broker — Discovery folgt danach automatisch."
+            )
+            waiting_logged = True
+        try:
+            await asyncio.wait_for(shutdown_event.wait(), timeout=poll_s)
+            return False
+        except TimeoutError:
+            continue
+    return True
 
 
 def main() -> None:
@@ -35,7 +71,6 @@ async def _async_main() -> None:
         datefmt="%Y-%m-%dT%H:%M:%S",
         stream=sys.stdout,
     )
-    logger = logging.getLogger(__name__)
     logger.info("=== Somfy RTS App v%s starting ===", __version__)
 
     init_rts_logger(log_format=config.log_format, file_logging=config.file_logging)
@@ -91,13 +126,13 @@ async def _async_main() -> None:
     if shutdown_event.is_set():
         sys.exit(0)
 
-    # Connect MQTT (paho threaded mode, non-blocking)
-    try:
-        mqtt_client.connect()
-    except RuntimeError as e:
-        logger.error("MQTT Fehler: %s", e)
+    # Connect MQTT in the background (paho retries until the broker is reachable)
+    # and wait — discovery messages would be dropped while disconnected.
+    mqtt_client.connect()
+    if not await wait_for_mqtt(mqtt_client, shutdown_event):
+        mqtt_client.disconnect()
         gateway.disconnect()
-        sys.exit(1)
+        sys.exit(0)
 
     mqtt_client.register_gateway(gateway.port_name, device_count)
     if store_error:

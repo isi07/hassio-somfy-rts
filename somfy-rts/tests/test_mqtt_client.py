@@ -357,9 +357,87 @@ class TestCallbackApiV2:
     def test_on_disconnect_unexpected_logs_warning(self, mqtt_client_with_mock, caplog):
         client, mock_paho = mqtt_client_with_mock
         client._on_disconnect(mock_paho, None, MagicMock(), _reason("DISCONNECT", 128), None)
-        assert "MQTT getrennt" in caplog.text
+        assert "MQTT-Verbindung verloren" in caplog.text
 
     def test_on_disconnect_normal_is_silent(self, mqtt_client_with_mock, caplog):
         client, mock_paho = mqtt_client_with_mock
         client._on_disconnect(mock_paho, None, MagicMock(), _reason("DISCONNECT", 0), None)
-        assert "MQTT getrennt" not in caplog.text
+        assert "MQTT-Verbindung verloren" not in caplog.text
+
+
+# ---------- Reconnect behaviour and logging ----------
+
+
+class TestReconnect:
+    def test_connect_starts_in_background_and_never_raises(self, mqtt_client_with_mock):
+        """connect() must not block or raise when the broker is unreachable."""
+        client, mock_paho = mqtt_client_with_mock
+        mock_paho.connect.side_effect = ConnectionRefusedError("refused")
+        client.connect()
+        mock_paho.connect_async.assert_called_once()
+        mock_paho.loop_start.assert_called_once()
+        mock_paho.reconnect_delay_set.assert_called_once_with(min_delay=1, max_delay=60)
+        mock_paho.connect.assert_not_called()
+
+    def test_connect_fail_logs_warning_with_broker_and_attempt(
+        self, mqtt_client_with_mock, caplog
+    ):
+        client, mock_paho = mqtt_client_with_mock
+        client._on_connect_fail(mock_paho, None)
+        client._on_connect_fail(mock_paho, None)
+        assert "core-mosquitto:1883 nicht erreichbar" in caplog.text
+        assert "Versuch 2" in caplog.text
+
+    def test_reconnect_after_outage_logs_duration_and_attempts(
+        self, mqtt_client_with_mock, caplog, monkeypatch
+    ):
+        import logging
+
+        import somfy_rts.mqtt_client as mod
+
+        client, mock_paho = mqtt_client_with_mock
+        now = [1000.0]
+        monkeypatch.setattr(mod.time, "monotonic", lambda: now[0])
+        client._ever_connected = True  # outage happens during operation
+        client._on_disconnect(mock_paho, None, MagicMock(), _reason("DISCONNECT", 128), None)
+        now[0] += 5
+        client._on_connect_fail(mock_paho, None)
+        now[0] += 40
+        with caplog.at_level(logging.INFO):
+            client._on_connect(mock_paho, None, MagicMock(), _reason("CONNACK", 0), None)
+        assert "MQTT wieder verbunden nach 45 s (1 fehlgeschlagene Versuche)" in caplog.text
+        # outage state is reset — the next connect is reported as a normal connect
+        caplog.clear()
+        with caplog.at_level(logging.INFO):
+            client._on_connect(mock_paho, None, MagicMock(), _reason("CONNACK", 0), None)
+        assert "wieder verbunden" not in caplog.text
+
+    def test_lost_connection_logs_warning(self, mqtt_client_with_mock, caplog):
+        client, mock_paho = mqtt_client_with_mock
+        client._on_disconnect(mock_paho, None, MagicMock(), _reason("DISCONNECT", 128), None)
+        assert "MQTT-Verbindung verloren" in caplog.text
+
+    def test_disconnect_stops_loop_after_disconnecting(self, mqtt_client_with_mock):
+        client, mock_paho = mqtt_client_with_mock
+        order: list[str] = []
+        mock_paho.disconnect.side_effect = lambda *a, **k: order.append("disconnect")
+        mock_paho.loop_stop.side_effect = lambda *a, **k: order.append("loop_stop")
+        client.disconnect()
+        assert order == ["disconnect", "loop_stop"]
+
+    def test_first_connect_after_failed_attempts_is_not_called_reconnect(
+        self, mqtt_client_with_mock, caplog, monkeypatch
+    ):
+        import logging
+
+        import somfy_rts.mqtt_client as mod
+
+        client, mock_paho = mqtt_client_with_mock
+        now = [500.0]
+        monkeypatch.setattr(mod.time, "monotonic", lambda: now[0])
+        client._on_connect_fail(mock_paho, None)
+        now[0] += 9
+        with caplog.at_level(logging.INFO):
+            client._on_connect(mock_paho, None, MagicMock(), _reason("CONNACK", 0), None)
+        assert "MQTT verbunden mit core-mosquitto:1883 nach 9 s (1 fehlgeschlagene Versuche)" in caplog.text
+        assert "wieder verbunden" not in caplog.text
