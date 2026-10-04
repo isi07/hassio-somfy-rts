@@ -235,3 +235,14 @@ class TestThreadSafety:
 
         with store_lock():
             assert get_and_increment("A00001") == (0, 1)
+
+
+class TestAddressPrefix:
+    def test_set_prefix_without_settings_block(self, tmp_codes_path):
+        """Older files without a settings block must not raise KeyError."""
+        from somfy_rts.rolling_code import get_settings, set_address_prefix
+
+        with open(tmp_codes_path, "w", encoding="utf-8") as f:
+            json.dump({"devices": []}, f)
+        set_address_prefix("b100")
+        assert get_settings() == {"address_prefix": "B100", "prefix_locked": True}

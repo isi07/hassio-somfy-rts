@@ -937,3 +937,33 @@ async def test_corrupt_store_delete_does_not_overwrite(client, tmp_codes_path):
     assert resp.status == 503
     with open(tmp_codes_path, encoding="utf-8") as f:
         assert f.read() == "{broken"
+
+
+async def test_corrupt_store_blocks_prog_with_503(client, ctx, tmp_codes_path):
+    with open(tmp_codes_path, "w", encoding="utf-8") as f:
+        f.write("{broken")
+    resp = await client.post("/api/devices/A00001/prog-long")
+    assert resp.status == 503
+    assert ctx.gateway.sent_commands == []
+
+
+async def test_corrupt_store_import_does_not_overwrite(client, tmp_codes_path):
+    with open(tmp_codes_path, "w", encoding="utf-8") as f:
+        f.write("{broken")
+    resp = await client.post(
+        "/api/devices/import",
+        json={"name": "X", "device_type": "shutter", "address": "A1B2C3",
+              "rolling_code": 5, "mode": "A"},
+    )
+    assert resp.status == 503
+    with open(tmp_codes_path, encoding="utf-8") as f:
+        assert f.read() == "{broken"
+
+
+async def test_corrupt_store_wizard_start_503(client, tmp_codes_path):
+    with open(tmp_codes_path, "w", encoding="utf-8") as f:
+        f.write("{broken")
+    resp = await client.post("/api/wizard/start", json={"name": "X"})
+    assert resp.status == 503
+    data = await resp.json()
+    assert data["message"] == data["error"]
