@@ -72,7 +72,9 @@ class CULGateway(BaseGateway):
             time.sleep(0.5)  # Wait for culfw to initialize
             self._flush()
             version = self._query_version()
-            # Enable Somfy RTS mode in culfw
+            # X21 = SlowRF report flags (bit 0: known messages, bit 5: RSSI), not a
+            # Somfy mode: every Ys command retunes the CC1101 to 433.42 MHz itself.
+            # Kept for compatibility. Note: reports and Yr:/Ys echoes are not read.
             self._serial.write(b"X21\n")
             self._serial.flush()
             time.sleep(0.5)  # Wait until CUL is ready to receive RTS commands

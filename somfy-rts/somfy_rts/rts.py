@@ -5,21 +5,26 @@ culfw Befehlsformat (433,42 MHz):
   2. YsA0<CMD><RC><ADDR>          → RTS Telegramm senden
 
   Felder:
-    A0    = festes culfw-Präfix (Timing/Flags)
+    A0    = KK, Somfy "encryption key" byte (frame byte 0). culfw copies it verbatim
+            into the frame and neither checks nor overwrites it. FHEM increments it
+            per frame within A0..AF (unless fixed_enckey); we send a constant A0.
     CMD   = 1 Byte Hex (2 Zeichen) = Byte 1 des Somfy-Frames
             Byte 1 = (ctrl << 4) | cks
             ctrl = Befehlsnibble (High-Nibble), z.B. 0x2 für UP
             cks  = Prüfsummennibble (Low-Nibble), von culfw intern berechnet
             → culfw erwartet ctrl im High-Nibble, cks=0; z.B. "20" für UP
     RC    = Rolling Code, 4 Hex-Zeichen (16-Bit Big-Endian)
-    ADDR  = Geräteadresse, 6 Hex-Zeichen (3 Byte)
+    ADDR  = Geräteadresse, 6 Hex-Zeichen (3 Byte). culfw reverses the byte order
+            on air and echoes "Ys<frame>" in on-air order after each transmission.
 
   Schicht 2 (RTS-Protokoll-Befehle, Eingabe für build_rts_sequence):
     UP, DOWN, MY, PROG, MY_UP, MY_DOWN
   Schicht 1 (HA-Semantik) wird von resolve_rts_action() in Schicht 2 übersetzt:
     OPEN → UP, CLOSE → DOWN, STOP → MY  (Ausnahme awning: OPEN→DOWN, CLOSE→UP)
 
-  Checksumme und Verschlüsselung übernimmt culfw intern.
+  Checksumme und Verschlüsselung übernimmt culfw intern (it masks CMD with 0xF0,
+  so a low nibble such as cul's "stop"=0x11 is discarded — 0x10 and 0x11 are the
+  same frame on air).
 
 WICHTIG: repeat=1 (Yr1) ist PFLICHT für Centralis uno RTS bei normalen Befehlen —
          der Motor ignoriert Telegramme mit repeat>1.

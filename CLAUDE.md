@@ -132,10 +132,11 @@ Sequenz pro Befehl (immer beide Zeilen senden):
   Wiederholungswerte (n):
     1 = Normalbefehle (PFLICHT für Centralis uno RTS!)
     4 = PROG Anlern (virtuellen Sender am Motor registrieren)
-    8 = PROG Lang (Motor in Anlernmodus versetzen, ersetzt PROG-Taste der Original-FB)
+   14 = PROG Lang (Motor in Anlernmodus versetzen, ersetzt PROG-Taste der Original-FB)
 
 Felder:
-  A0    = festes culfw-Präfix (Timing/Flags-Byte)
+  A0    = KK, Somfy "encryption key"-Byte (Frame-Byte 0). culfw übernimmt es unverändert,
+          prüft/überschreibt es nicht. FHEM zählt es pro Frame A0..AF hoch, wir senden fest A0.
   CMD   = 1 Byte, 2 Hex-Zeichen = Byte 1 des Somfy-Frames
           Byte 1 = (ctrl << 4) | cks
           ctrl  = Befehlsnibble im High-Nibble, z.B. 0x2 für OPEN → "20"
@@ -143,8 +144,13 @@ Felder:
           → culfw erwartet ctrl im High-Nibble mit cks=0
   RC    = Rolling Code, 4 Hex-Zeichen (16-Bit Big-Endian), z.B. "001A"
   ADDR  = Geräteadresse, 6 Hex-Zeichen (3 Byte), z.B. "A1B2C3"
+          culfw dreht die Bytereihenfolge auf Funk um und gibt nach jedem Senden ein
+          Echo "Ys<frame>" in Funk-Reihenfolge aus (z.B. "...C3B2A1").
 
-Beispiel (UP, RC=1, Addr=A1B2C3, repeat=1):
+  X21 (beim Connect gesendet) = SlowRF-Report-Flags (Bit 0 bekannte Nachrichten, Bit 5 RSSI),
+  KEIN Somfy-Modus. culfw/a-culfw können Somfy RTS nur SENDEN, nicht empfangen.
+
+Beispiel (UP, RC=0x001A, Addr=A1B2C3, repeat=1):
   Yr1
   YsA020001AA1B2C3
 
