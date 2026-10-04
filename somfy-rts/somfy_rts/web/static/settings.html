@@ -32,6 +32,23 @@
       <div class="card-title">MQTT</div>
     </div>
     <div id="mqtt-settings"></div>
+    <div class="instruction-box">
+      <strong>Übliche MQTT-Ports</strong>
+      <table class="port-table">
+        <tr><th>Port</th><th>Verbindung</th><th>Einstellung</th></tr>
+        <tr><td class="mono">1883</td><td>unverschlüsselt</td>
+            <td><span class="mono">mqtt_tls</span> aus</td></tr>
+        <tr><td class="mono">8883</td><td>TLS, öffentliches Zertifikat (z.&nbsp;B. Let's Encrypt)</td>
+            <td><span class="mono">mqtt_tls</span> an, <span class="mono">mqtt_tls_verify</span> an</td></tr>
+        <tr><td class="mono">8883</td><td>TLS, selbst signiertes Zertifikat</td>
+            <td><span class="mono">mqtt_tls</span> an, <span class="mono">mqtt_tls_verify</span> aus</td></tr>
+      </table>
+      <div class="form-hint">
+        Der Port hängt nicht vom Zertifikat ab — öffentlich und selbst signiert nutzen
+        üblicherweise beide 8883. Manche Broker verwenden abweichende Ports; maßgeblich ist
+        die Broker-Konfiguration. Ändern unter <em>App → Konfiguration</em>.
+      </div>
+    </div>
   </div>
 
   <div class="card">
@@ -85,7 +102,9 @@ async function loadSettings() {
       row("mqtt_host", cfg.mqtt_host, true) +
       row("mqtt_port", cfg.mqtt_port, true) +
       row("mqtt_user", cfg.mqtt_user || '<span class="text-dim">—</span>', false) +
-      row("mqtt_password", cfg.mqtt_user ? "••••••••" : '<span class="text-dim">—</span>', false);
+      row("mqtt_password", cfg.mqtt_user ? "••••••••" : '<span class="text-dim">—</span>', false) +
+      row("mqtt_tls", bool(cfg.mqtt_tls), false) +
+      row("mqtt_tls_verify", cfg.mqtt_tls ? bool(cfg.mqtt_tls_verify) : '<span class="text-dim">—</span>', false);
 
     document.getElementById("hw-settings").innerHTML =
       row("usb_port",        cfg.usb_port,        true) +

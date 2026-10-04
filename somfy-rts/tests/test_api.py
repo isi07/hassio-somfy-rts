@@ -973,3 +973,15 @@ async def test_status_reports_mqtt_connection(aiohttp_client, tmp_codes_path):
     resp = await client.get("/api/status")
     assert resp.status == 200
     assert (await resp.json())["mqtt_connected"] is True
+
+
+async def test_settings_include_tls_options(aiohttp_client, tmp_codes_path):
+    """The Web UI settings page shows TLS and certificate verification."""
+    gw = SimGateway()
+    gw.connect()
+    cfg = Config(mqtt_tls=True, mqtt_tls_verify=False, mqtt_port=8883)
+    client = await aiohttp_client(create_app(AppContext(gateway=gw, config=cfg)))
+    data = await (await client.get("/api/settings")).json()
+    assert data["mqtt_tls"] is True
+    assert data["mqtt_tls_verify"] is False
+    assert "mqtt_password" not in data  # never expose the password

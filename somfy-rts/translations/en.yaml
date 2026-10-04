@@ -6,7 +6,11 @@ configuration:
       Hostname or IP of the MQTT broker. For the Mosquitto app: core-mosquitto
   mqtt_port:
     name: MQTT port
-    description: Port of the MQTT broker (default 1883).
+    description: >-
+      Port of the MQTT broker. Usual: 1883 = unencrypted (MQTT TLS off);
+      8883 = encrypted with TLS — the same for public (e.g. Let's Encrypt) and
+      self-signed certificates. Some brokers use other ports; the broker's
+      configuration is authoritative.
   mqtt_user:
     name: MQTT user
     description: User name for the MQTT broker (empty = no authentication).
@@ -20,9 +24,10 @@ configuration:
   mqtt_tls_verify:
     name: Verify TLS certificate
     description: >-
-      Verify the broker certificate (recommended, e.g. with Let's Encrypt).
-      Disable for testing only — the connection is then not protected against
-      an impostor broker.
+      Verify the broker certificate. Keep it on for public certificates
+      (e.g. Let's Encrypt). Turn it off for self-signed certificates (a custom
+      CA file is not supported) — the connection is then encrypted but not
+      protected against an impostor broker.
   usb_port:
     name: NanoCUL USB port
     description: >-

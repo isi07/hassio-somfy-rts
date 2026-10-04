@@ -6,7 +6,11 @@ configuration:
       Hostname oder IP des MQTT-Brokers. Für die Mosquitto App: core-mosquitto
   mqtt_port:
     name: MQTT-Port
-    description: Port des MQTT-Brokers (Standard 1883).
+    description: >-
+      Port des MQTT-Brokers. Üblich: 1883 = unverschlüsselt (MQTT TLS aus);
+      8883 = verschlüsselt mit TLS — gilt für öffentliche (z. B. Let's Encrypt)
+      und selbst signierte Zertifikate gleichermaßen. Manche Broker nutzen
+      abweichende Ports; maßgeblich ist die Broker-Konfiguration.
   mqtt_user:
     name: MQTT-Benutzer
     description: Benutzername für den MQTT-Broker (leer = ohne Anmeldung).
@@ -20,9 +24,10 @@ configuration:
   mqtt_tls_verify:
     name: TLS-Zertifikat prüfen
     description: >-
-      Zertifikat des Brokers prüfen (empfohlen, z. B. bei Let's Encrypt).
-      Ausschalten nur zum Testen — dann ist die Verbindung nicht vor einem
-      gefälschten Broker geschützt.
+      Zertifikat des Brokers prüfen. An lassen bei öffentlichem Zertifikat
+      (z. B. Let's Encrypt). Bei selbst signiertem Zertifikat ausschalten
+      (eigene CA-Datei wird nicht unterstützt) — die Verbindung ist dann
+      verschlüsselt, aber nicht vor einem gefälschten Broker geschützt.
   usb_port:
     name: USB-Port des NanoCUL
     description: >-

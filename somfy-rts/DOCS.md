@@ -43,7 +43,7 @@ Alle Optionen werden unter **Konfiguration** in der App eingestellt:
 | `usb_port` | `/dev/ttyACM0` | Pfad zum NanoCUL USB-Stick |
 | `baudrate` | `9600` | Serielle Baudrate (culfw Standard) |
 | `mqtt_host` | `core-mosquitto` | MQTT Broker Hostname |
-| `mqtt_port` | `1883` | MQTT Broker Port |
+| `mqtt_port` | `1883` | MQTT Broker Port — üblich `1883` unverschlüsselt, `8883` mit TLS (öffentliches **und** selbst signiertes Zertifikat) |
 | `mqtt_user` | `""` | MQTT Benutzername (leer = keine Auth) |
 | `mqtt_password` | `""` | MQTT Passwort |
 | `mqtt_tls` | `false` | Verbindung zum Broker mit TLS verschlüsseln (Port meist `8883`) |

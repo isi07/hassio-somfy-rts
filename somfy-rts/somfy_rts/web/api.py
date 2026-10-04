@@ -592,6 +592,8 @@ async def get_settings(request: web.Request) -> web.Response:
             "mqtt_host": c.mqtt_host,
             "mqtt_port": c.mqtt_port,
             "mqtt_user": c.mqtt_user,
+            "mqtt_tls": c.mqtt_tls,
+            "mqtt_tls_verify": c.mqtt_tls_verify,
             "log_level": c.log_level.lower(),
             "address_prefix": c.address_prefix,
             "log_format": c.log_format,

@@ -358,6 +358,12 @@ input[type="checkbox"] {
   margin: .75rem 0;
 }
 .instruction-box ol { padding-left: 1.2em; }
+.port-table { width: 100%; border-collapse: collapse; margin: .5rem 0; font-size: .82rem; }
+.port-table th, .port-table td {
+  text-align: left; vertical-align: top;
+  padding: .3rem .5rem .3rem 0; border-bottom: 1px solid var(--border);
+}
+.port-table th { color: var(--text-dim); font-weight: 600; }
 .instruction-box li { margin-bottom: .35rem; }
 
 .result-box {

@@ -416,7 +416,7 @@ Das LWT-Topic `cul2mqtt/status` wird bei Verbindungsabbruch automatisch auf `"of
 | `usb_port` | string | `/dev/ttyACM0` | NanoCUL Pfad |
 | `baudrate` | int | 9600 | Baudrate |
 | `mqtt_host` | string | `core-mosquitto` | MQTT Broker |
-| `mqtt_port` | int | 1883 | MQTT Port |
+| `mqtt_port` | int | 1883 | MQTT Port (Standard: 1883 ohne TLS, 8883 mit TLS — Hilfe in Übersetzungen + Web-UI-Einstellungsseite) |
 | `mqtt_user` | string | `""` | MQTT Benutzer |
 | `mqtt_password` | password | `""` | MQTT Passwort |
 | `mqtt_tls` | bool | `false` | TLS zum Broker (System-CA-Store, z. B. Let's Encrypt) |
