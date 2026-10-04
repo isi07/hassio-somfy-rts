@@ -1,0 +1,53 @@
+---
+configuration:
+  mqtt_host:
+    name: MQTT-Broker
+    description: >-
+      Hostname oder IP des MQTT-Brokers. Für die Mosquitto App: core-mosquitto
+  mqtt_port:
+    name: MQTT-Port
+    description: Port des MQTT-Brokers (Standard 1883).
+  mqtt_user:
+    name: MQTT-Benutzer
+    description: Benutzername für den MQTT-Broker (leer = ohne Anmeldung).
+  mqtt_password:
+    name: MQTT-Passwort
+    description: Passwort für den MQTT-Broker.
+  usb_port:
+    name: USB-Port des NanoCUL
+    description: >-
+      Gerätepfad des NanoCUL-Sticks, z. B. /dev/ttyACM0 oder /dev/ttyUSB0
+      (siehe App → Info → Hardware).
+  baudrate:
+    name: Baudrate
+    description: Serielle Baudrate des NanoCUL (culfw-Standard 9600).
+  address_prefix:
+    name: Adress-Präfix
+    description: >-
+      4 Hex-Zeichen für die Adressen neu angelernter Geräte (z. B. A000 → A00001).
+      Wird nach dem ersten angelernten Gerät gesperrt.
+  log_level:
+    name: Log-Level
+    description: Ausführlichkeit des App-Logs.
+  log_format:
+    name: Format des Frame-Logs
+    description: Gesendete RTS-Frames als Text oder als JSON protokollieren.
+  simulation_mode:
+    name: Simulationsmodus
+    description: >-
+      Ohne NanoCUL testen — Befehle werden nur geloggt, nicht gesendet.
+      Achtung: Rolling Codes werden trotzdem hochgezählt.
+  file_logging:
+    name: Frame-Log in Datei
+    description: >-
+      Gesendete RTS-Frames zusätzlich nach /share/somfy_rts/rts_frames.log schreiben.
+  timezone:
+    name: Zeitzone
+    description: Zeitzone für die Zeitstempel im Log, z. B. Europe/Berlin.
+  debug_mode:
+    name: Debug-Modus
+    description: >-
+      Erweiterte Steuerung in der Web-UI: beliebigen RTS-Befehl mit frei wählbarer
+      Wiederholungszahl senden. Nur zur Fehlersuche.
+network:
+  8099/tcp: Web-UI (nur nötig für Zugriff ohne Home-Assistant-Ingress)

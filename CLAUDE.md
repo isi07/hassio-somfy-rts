@@ -157,7 +157,8 @@ Sequenz pro Befehl (immer beide Zeilen senden):
   Wiederholungswerte (n):
     1 = Normalbefehle (PFLICHT für Centralis uno RTS!)
     4 = PROG Anlern (virtuellen Sender am Motor registrieren)
-   14 = PROG Lang (Motor in Anlernmodus versetzen, ersetzt PROG-Taste der Original-FB)
+   14 = PROG Lang (Motor in Anlernmodus versetzen — wie PROG-Taste halten; wirkt NUR von einem
+        Sender/einer Adresse, die der Motor bereits kennt, z. B. um einen weiteren Sender anzulernen)
 
 Felder:
   A0    = KK, Somfy "encryption key"-Byte (Frame-Byte 0). culfw übernimmt es unverändert,
@@ -255,6 +256,7 @@ hassio-somfy-rts/
 │   ├── pytest.ini
 │   ├── run.sh                         # options.json → SOMFY_* Env, legt somfy_codes.json an
 │   ├── DOCS.md
+│   ├── translations/                  # de.yaml, en.yaml — Namen/Beschreibungen der Optionen
 │   ├── CHANGELOG.md                   # generiert via git-cliff — nie manuell bearbeiten
 │   ├── tests/                         # pytest (conftest.py + test_<modul>.py)
 │   └── somfy_rts/                     # Python-Paket
@@ -385,7 +387,8 @@ Das LWT-Topic `cul2mqtt/status` wird bei Verbindungsabbruch automatisch auf `"of
 | `debug_mode` | bool? | `false` | Erweiterte Web-UI-Steuerung (`raw-cmd`, freier Repeat) |
 
 Neue Option = `config.yaml` (options + schema) + `run.sh` (export `SOMFY_*`) + `config.py`
-+ DOCS.md — alle vier anpassen.
++ `translations/de.yaml` + `translations/en.yaml` + DOCS.md — alle anpassen
+(`tests/test_translations.py` schlägt fehl, wenn eine Übersetzung fehlt).
 
 Geräte werden **nicht** in `config.yaml` verwaltet, sondern in `/data/somfy_codes.json`
 (automatisch durch den Anlern-Wizard oder ioBroker-Import erstellt).
@@ -542,7 +545,9 @@ Der `PairingWizard` steuert den 5-stufigen Anlern-Flow:
 1. `wizard.start(name, device_type, mode="A")` — Adresse generieren, RC auf 0 setzen, in `somfy_codes.json` voranlegen (inkl. `mode`-Feld)
 2. Motor in Programmiermodus versetzen — entweder:
    - **Klassisch:** Orig.-FB PROG 3s halten → kurzes Auf-Ab
-   - **Alternativ:** `wizard.send_prog_long()` (Yr14) senden — ersetzt die Original-FB
+   - **Alternativ:** PROG Lang (Yr14) von einem **bereits angelernten** Gerät der App
+     (`POST /api/devices/{id}/prog-long`). `wizard.send_prog_long()` sendet von der neuen,
+     noch unbekannten Adresse und kann den Motor daher **nicht** in den Anlernmodus versetzen
 3. `wizard.send_prog_pair()` (oder Alias `wizard.send_prog()`) — PROG Yr4 senden → virtuellen Sender anlernen
 4. Operator sieht Motor-Bestätigungsbewegung → `wizard.confirm()` aufrufen
 5. `wizard.get_device_config()` — Config-Dict zurückgeben (enthält `mode`)
@@ -551,7 +556,7 @@ Der `PairingWizard` steuert den 5-stufigen Anlern-Flow:
 
 | Methode | repeat | Aktion | Zustand danach |
 |---------|--------|--------|----------------|
-| `send_prog_long()` | Yr14 | Motor in Anlernmodus versetzen (ersetzt Orig.-FB PROG) | ADDR_READY |
+| `send_prog_long()` | Yr14 | PROG Lang von der neuen Adresse — wirkungslos, solange diese Adresse nicht angelernt ist | ADDR_READY |
 | `send_prog_pair()` | Yr4 | Virtuellen Sender am Motor registrieren/deregistrieren | PROG_SENT |
 | `send_prog()` | Yr4 | Alias für `send_prog_pair()` | PROG_SENT |
 

@@ -1,0 +1,53 @@
+---
+configuration:
+  mqtt_host:
+    name: MQTT broker
+    description: >-
+      Hostname or IP of the MQTT broker. For the Mosquitto app: core-mosquitto
+  mqtt_port:
+    name: MQTT port
+    description: Port of the MQTT broker (default 1883).
+  mqtt_user:
+    name: MQTT user
+    description: User name for the MQTT broker (empty = no authentication).
+  mqtt_password:
+    name: MQTT password
+    description: Password for the MQTT broker.
+  usb_port:
+    name: NanoCUL USB port
+    description: >-
+      Device path of the NanoCUL stick, e.g. /dev/ttyACM0 or /dev/ttyUSB0
+      (see App → Info → Hardware).
+  baudrate:
+    name: Baud rate
+    description: Serial baud rate of the NanoCUL (culfw default 9600).
+  address_prefix:
+    name: Address prefix
+    description: >-
+      4 hex characters used for the addresses of newly paired devices
+      (e.g. A000 → A00001). Locked after the first device has been paired.
+  log_level:
+    name: Log level
+    description: Verbosity of the app log.
+  log_format:
+    name: Frame log format
+    description: Log transmitted RTS frames as text or as JSON.
+  simulation_mode:
+    name: Simulation mode
+    description: >-
+      Test without a NanoCUL — commands are only logged, not transmitted.
+      Note: rolling codes are still incremented.
+  file_logging:
+    name: Frame log file
+    description: >-
+      Additionally write transmitted RTS frames to /share/somfy_rts/rts_frames.log.
+  timezone:
+    name: Time zone
+    description: Time zone for log timestamps, e.g. Europe/Berlin.
+  debug_mode:
+    name: Debug mode
+    description: >-
+      Advanced controls in the Web UI: send any RTS command with a freely chosen
+      repeat count. For troubleshooting only.
+network:
+  8099/tcp: Web UI (only needed for access without Home Assistant Ingress)

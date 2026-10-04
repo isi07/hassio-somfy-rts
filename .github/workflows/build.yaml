@@ -37,7 +37,7 @@ jobs:
       - name: Lint YAML
         run: |
           yamllint .github/workflows/build.yaml
-          yamllint somfy-rts/config.yaml
+          yamllint somfy-rts/config.yaml somfy-rts/translations/
 
       - name: Lint Shell
         run: |
