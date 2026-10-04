@@ -36,6 +36,7 @@ commit_parsers = [
   { message = "^perf",      group = "Performance" },
   { message = "^refactor",  group = "Refactoring" },
   { message = "^docs",      group = "Dokumentation" },
+  { message = "^chore: release", skip = true },  # release commits carry no change
   { message = "^chore",     group = "Sonstiges" },
   { message = "^ci",        group = "CI/CD" },
   { message = "^test",      group = "Tests" },

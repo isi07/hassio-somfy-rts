@@ -368,8 +368,9 @@ Die App überschreibt sie in diesem Fall **nicht** mit leeren Werten, denn dann 
 alle Motoren desynchronisiert. Stattdessen:
 
 - Beim ersten Erkennen wird eine Kopie als `somfy_codes.json.corrupt-<Zeitstempel>` abgelegt
-- Alle Befehle werden verweigert (Log `ERROR`, Web-UI HTTP 503, Gateway-Status
-  „Fehler: somfy_codes.json beschädigt")
+- Alle Befehle werden verweigert (Log `ERROR`, Web-UI HTTP 503, MQTT-Topic
+  `cul2mqtt/gateway/status` = „Fehler: somfy_codes.json beschädigt"; dafür gibt es
+  keine eigene HA-Entität — maßgeblich ist das App-Log)
 - Datei manuell reparieren oder aus einem HA-Backup wiederherstellen, danach App neu starten.
   Im Zweifel die Rolling Codes um **+10** erhöhen.
 

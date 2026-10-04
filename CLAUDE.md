@@ -91,7 +91,7 @@ log_rts_frame(seq, address, action, success=True)   # erst hier: STATUS=OK ist e
 **Name:** hassio-somfy-rts  
 **GitHub:** https://github.com/isi07/hassio-somfy-rts  
 **Lizenz:** MIT  
-**Version:** 0.1.0  
+**Version:** siehe `somfy-rts/config.yaml` (einzige Quelle der Wahrheit)  
 **Maintainer:** isi07
 
 Dieses Repository ist ein **Home Assistant App-Repository** (ehemals Add-on-Repository),
@@ -104,12 +104,15 @@ Jalousien usw.) über einen **NanoCUL USB-Stick** mit **culfw-Firmware** via **M
 
 | Komponente | Details |
 |---|---|
-| App Runtime | Docker (baseimage: `ghcr.io/home-assistant/amd64-base-python:3.12`) |
+| App Runtime | Docker, Basis `ghcr.io/home-assistant/{arch}-base-python:3.12-alpine3.18` (Build-Arg `BUILD_FROM` in `build.yaml`) |
+| Architekturen | amd64, aarch64 |
 | Sprache | Python 3.12 |
 | Protokoll | Somfy RTS (433,42 MHz) über NanoCUL USB (culfw) |
-| Kommunikation | MQTT (Paho) → Home Assistant |
-| HA-Integration | MQTT Discovery (Cover/Button-Entitäten) |
-| Config | App-Options (`/data/options.json`) |
+| Kommunikation | MQTT (paho-mqtt, Thread-Modus `loop_start`) → Home Assistant |
+| Web-UI | aiohttp (asyncio), HA Ingress Port 8099 |
+| HA-Integration | MQTT Discovery (Cover/Light/Switch/Button/Sensor-Entitäten) |
+| Config | App-Options → `run.sh` → `SOMFY_*` Env-Variablen → `config.py` |
+| Abhängigkeiten | `requirements.txt` (nicht gepinnt: pyserial, paho-mqtt, aiohttp) |
 | Versionierung | Conventional Commits + git-cliff + semver Tags |
 
 ---
@@ -214,28 +217,40 @@ hassio-somfy-rts/
 ├── README.md
 ├── repository.yaml                    # HA App-Repository Metadaten
 ├── cliff.toml                         # git-cliff Changelog-Konfiguration
-├── .gitignore
+├── .gitignore / .gitattributes        # LF im Repo erzwungen
+├── .yamllint
 ├── .github/
+│   ├── dependabot.yaml                # wöchentliche Updates der GitHub Actions
 │   └── workflows/
-│       └── build.yaml                 # CI: lint bei PR, Build+Release nur bei Tags
+│       └── build.yaml                 # CI: Lint+Tests immer, Build+Release nur bei Tags
+├── tools/
+│   └── cul_sniff.py                   # Diagnose: liest CUL-Rohzeilen (nicht im Image)
 ├── somfy-rts/                         # Die eigentliche App
-│   ├── config.yaml                    # HA App-Schema
+│   ├── config.yaml                    # HA App-Schema + version
 │   ├── Dockerfile
-│   ├── requirements.txt               # paho-mqtt, pyserial
-│   ├── run.sh
+│   ├── requirements.txt               # pyserial, paho-mqtt, aiohttp
+│   ├── requirements-test.txt          # pytest, pytest-asyncio, pytest-aiohttp, pytest-mock
+│   ├── pytest.ini
+│   ├── run.sh                         # options.json → SOMFY_* Env, legt somfy_codes.json an
 │   ├── DOCS.md
-│   ├── CHANGELOG.md
+│   ├── CHANGELOG.md                   # generiert via git-cliff — nie manuell bearbeiten
+│   ├── tests/                         # pytest (conftest.py + test_<modul>.py)
 │   └── somfy_rts/                     # Python-Paket
-│       ├── __init__.py                # __version__
-│       ├── main.py                    # Einstiegspunkt
-│       ├── config.py                  # Liest /data/options.json
-│       ├── gateway.py                 # BaseGateway (ABC) + CULGateway
-│       ├── rolling_code.py            # Atomare RC-Persistenz (/data/somfy_codes.json)
-│       ├── rts.py                     # build_rts_sequence() → RTSSequence, log_rts_frame()
+│       ├── __init__.py                # __version__ (aus Env SOMFY_VERSION)
+│       ├── main.py                    # Einstiegspunkt (asyncio)
+│       ├── config.py                  # Config/DeviceConfig aus SOMFY_* Env
+│       ├── gateway.py                 # BaseGateway (ABC), CULGateway, SimGateway
+│       ├── rolling_code.py            # Atomare RC-Persistenz, store_lock(), RollingCodeStoreError
+│       ├── rts.py                     # build_rts_sequence(), log_rts_frame(), TX_LOCK
+│       ├── rts_logger.py              # strukturiertes Frame-Log (text/json, optional Datei)
 │       ├── mqtt_client.py             # MQTT + HA Discovery (Modus A/B, LWT, Origin)
-│       ├── device.py                  # Device-Klasse (alle 7 Typen, Modus A/B)
+│       ├── device.py                  # Device-Klasse (alle 8 Typen, Modus A/B)
 │       ├── wizard.py                  # PairingWizard (5-Schritt Anlern-Flow)
-│       └── device_profiles.json      # Gerätetyp-Definitionen
+│       ├── device_profiles.json       # Gerätetyp-Definitionen
+│       └── web/
+│           ├── api.py                 # REST-Endpunkte (aiohttp RouteTableDef)
+│           ├── server.py              # App-Setup, statische Seiten, store_error_middleware
+│           └── static/                # index/wizard/settings/logs.html, style.css
 ```
 
 ---
@@ -247,18 +262,32 @@ hassio-somfy-rts/
 ```python
 BaseGateway (ABC)          # gateway.py
     └── CULGateway         # pyserial → NanoCUL
+    └── SimGateway         # ohne Hardware (simulation_mode, Tests)
     └── SIGNALduinoGateway # (zukünftig)
 ```
+
+### Threads
+
+- **paho-Thread** (`loop_start`): MQTT-Befehle → `Device._handle_command()`
+- **asyncio-Event-Loop**: Web-UI/REST, Wizard, Import, Löschen
+- Beide greifen auf `somfy_codes.json` und die serielle Schnittstelle zu →
+  `store_lock()` und `rts.TX_LOCK` (siehe Kritische Invarianten)
 
 ### MQTT Discovery Struktur
 
 **Gateway-Device** (`identifiers: ["somfy_rts_gateway"]`):
-- 4 Diagnose-Sensoren: Verbindung, USB-Port, Geräteanzahl, SW-Version
+- 1 binary_sensor Verbindung (liest LWT `cul2mqtt/status` direkt)
+- 3 Diagnose-Sensoren: USB-Port, Geräteanzahl, SW-Version
 - Alle `entity_category: diagnostic`
+- `cul2mqtt/gateway/status` (Text) wird publiziert, hat aber **keine** HA-Entität
 
-**Sub-Device pro Gerät** (`via_device: "somfy_rts_gateway"`):
-- **Modus A:** 1x Cover-Entity (optimistisch, device_class je Typ)
-- **Modus B:** 3x Button (`entity_category: config`) + 2x Sensor (`entity_category: diagnostic`)
+**Sub-Device pro Gerät** (`via_device: "somfy_rts_gateway"`) — maßgeblich ist
+`discovery_topics()` in `mqtt_client.py`:
+- **Beide Modi:** Buttons PROG Lang, PROG Anlern, MY; Sensoren rolling_code, last_command,
+  device_address; bei `has_tilt` zusätzlich Buttons MY_UP/MY_DOWN
+- **Modus A:** + Haupt-Entity je `ha_platform` (cover/light/switch, optimistisch;
+  keins bei `light_dimmer`)
+- **Modus B:** + Buttons Auf, Zu, Stop
 
 **Availability:** LWT auf `cul2mqtt/status` (online/offline, retain=True)
 
@@ -273,8 +302,10 @@ BaseGateway (ABC)          # gateway.py
 
 | Modus | Discovery | Verwendung |
 |-------|-----------|------------|
-| A | Cover-Entity (optimistisch) + 3 Diagnose-Sensoren + 2 PROG-Buttons | Standalone, direkte Steuerung |
-| B | 3 Buttons + 2 PROG-Buttons + 2 Diagnose-Sensoren | Template Cover in HA (manuell, siehe DOCS.md) |
+| A | Haupt-Entity je `ha_platform` (optimistisch) + MY-Button + 2 PROG-Buttons + 3 Diagnose-Sensoren | Standalone, direkte Steuerung |
+| B | Buttons Auf/Zu/Stop + MY-Button + 2 PROG-Buttons + 3 Diagnose-Sensoren | Template Cover in HA (manuell, siehe DOCS.md) |
+
+Bei `has_tilt` (blind) in beiden Modi zusätzlich Buttons MY_UP/MY_DOWN.
 
 ### PROG-Buttons (beide Modi, entity_category: config)
 
@@ -294,11 +325,14 @@ Kein Cover-State-Update bei PROG_LONG/PROG_PAIR — nur `rolling_code` + `last_c
 | `last_command` | `somfy/<slug>/last_command` | letzter Befehl (OPEN/CLOSE/STOP/MY/PROG) |
 | `last_command` Attribut | `somfy/<slug>/last_command_attr` | `{"raw_frame": "YsA0…"}` — vollständiger Telegram-String |
 
-### Nur Modus A zusätzlich
+| `device_address` | `somfy/<slug>/device_address` | statische Hex-Adresse des virtuellen Senders (einmalig beim Setup) |
 
-| Sensor | Topic | Inhalt |
-|--------|-------|--------|
-| `device_address` | `somfy/<slug>/device_address` | statische Hex-Adresse des virtuellen Senders |
+### MY-Button (beide Modi, entity_category: config)
+
+| Modus | unique_id Suffix | Topic | Payload |
+|-------|-----------------|-------|---------|
+| A | `_my` | `somfy/<slug>/set` | `MY` |
+| B | `_my` | `somfy/<slug>/button/my` | `PRESS` |
 
 ### Availability
 
@@ -322,6 +356,14 @@ Das LWT-Topic `cul2mqtt/status` wird bei Verbindungsabbruch automatisch auf `"of
 | `mqtt_password` | password | `""` | MQTT Passwort |
 | `address_prefix` | string | `A000` | Präfix für neue Adressen (4 Hex-Zeichen) |
 | `log_level` | enum | `info` | debug/info/warning/error |
+| `log_format` | enum | `text` | text/json (Frame-Log) |
+| `simulation_mode` | bool | `false` | `SimGateway` statt NanoCUL (ohne Hardware) |
+| `file_logging` | bool | `false` | Frame-Log nach `/share/somfy_rts/rts_frames.log` |
+| `timezone` | string | `Europe/Berlin` | IANA-Zeitzone für Log-Zeitstempel |
+| `debug_mode` | bool? | `false` | Erweiterte Web-UI-Steuerung (`raw-cmd`, freier Repeat) |
+
+Neue Option = `config.yaml` (options + schema) + `run.sh` (export `SOMFY_*`) + `config.py`
++ DOCS.md — alle vier anpassen.
 
 Geräte werden **nicht** in `config.yaml` verwaltet, sondern in `/data/somfy_codes.json`
 (automatisch durch den Anlern-Wizard oder ioBroker-Import erstellt).
@@ -398,7 +440,7 @@ In Modus A publiziert das Gerät den Zustand als `"ON"`/`"OFF"` für light/switc
 | `homeassistant/button/<id>_prog_long/config` | Publish | Discovery PROG Lang (retain) |
 | `homeassistant/button/<id>_prog_pair/config` | Publish | Discovery PROG Anlern (retain) |
 | `somfy/<slug>/state` | Publish | open / closed / stopped (retain) |
-| `somfy/<slug>/set` | Subscribe | OPEN / CLOSE / STOP |
+| `somfy/<slug>/set` | Subscribe | OPEN / CLOSE / STOP / MY (light/switch: ON / OFF) |
 | `somfy/<slug>/cmd` | Subscribe | PROG_LONG / PROG_PAIR |
 | `somfy/<slug>/rolling_code` | Publish | aktueller RC nach Befehl (retain) |
 | `somfy/<slug>/last_command` | Publish | OPEN/CLOSE/STOP/MY/PROG (retain) |
@@ -414,6 +456,7 @@ In Modus A publiziert das Gerät den Zustand als `"ON"`/`"OFF"` für light/switc
 | `somfy/<slug>/button/auf` | Subscribe | PRESS |
 | `somfy/<slug>/button/zu` | Subscribe | PRESS |
 | `somfy/<slug>/button/stop` | Subscribe | PRESS |
+| `somfy/<slug>/button/my` | Subscribe | PRESS |
 | `somfy/<slug>/cmd` | Subscribe | PROG_LONG / PROG_PAIR |
 | `somfy/<slug>/rolling_code` | Publish | aktueller RC (retain) |
 | `somfy/<slug>/last_command` | Publish | OPEN/CLOSE/STOP/MY/PROG (retain) |
@@ -446,12 +489,18 @@ Vollständige YAML-Beispiele für Modus A und Modus B in **DOCS.md**.
 
 ## CI/CD (GitHub Actions)
 
-- **Lint (`ruff`):** Bei jedem PR und Tag
-- **Docker Build (amd64/aarch64):** Nur bei Tag-Push (`v*`)
-- **Release:** Automatisch bei Tag, Changelog via git-cliff
-- **Conventional Commits:** `feat:`, `fix:`, `perf:`, `refactor:`, `docs:`, `chore:`, `ci:`
+Workflow `.github/workflows/build.yaml`, Job-Kette `lint → build → manifest → release`:
+
+- **lint** (jeder Push auf `main`, jeder PR, jeder Tag): ruff, **pytest**, yamllint,
+  shellcheck, hadolint, JSON-Check, HA-Add-on-Linter, actionlint
+- **build** (nur Tag `v*`): Images pro Arch, Version aus `config.yaml`
+- **manifest**: Multi-Arch-Image `ghcr.io/isi07/somfy-rts:<version>` + `:latest`
+- **release**: GitHub Release, Notes = `git cliff --latest` (Pre-Release bei `-` im Tag)
+- **Images:** `ghcr.io/isi07/somfy-rts:<version>-<arch>`; `config.yaml` → `image: ghcr.io/isi07/somfy-rts`
+- **Conventional Commits:** `feat:`, `fix:`, `perf:`, `refactor:`, `docs:`, `chore:`, `ci:`, `test:`
+  (`chore: release …` wird im Changelog ausgeblendet)
 - **Tag-Format:** `v0.1.0` (stable), `v0.1.0-beta.1` (pre-release)
-- **Images:** `ghcr.io/isi07/hassio-somfy-rts/somfy-rts:<version>-<arch>`
+- **Dependabot:** wöchentliche PRs für GitHub Actions — nicht zusammen mit einem Release mergen
 
 ---
 
@@ -545,8 +594,10 @@ Registrierung und Deregistrierung immer dieselben Topics verwenden.
 
 | Modus | Topics die gecleart werden |
 |-------|---------------------------|
-| A | cover, sensor_rolling_code, sensor_last_command, sensor_device_address, button_prog_long, button_prog_pair |
-| B | button_auf, button_zu, button_stop, sensor_rolling_code, sensor_last_command, button_prog_long, button_prog_pair |
+| A | Haupt-Entity (cover/light/switch, nicht bei light_dimmer), button_my, sensor_rolling_code, sensor_last_command, sensor_device_address, button_prog_long, button_prog_pair (+ button_my_auf/my_zu bei has_tilt) |
+| B | button_auf, button_zu, button_stop, button_my, sensor_rolling_code, sensor_last_command, sensor_device_address, button_prog_long, button_prog_pair (+ button_my_auf/my_zu bei has_tilt) |
+
+Zusätzlich leert `state_topics()` die retained `somfy/<slug>/…`-Werte.
 
 ### Fehlerbehandlung `RollingCodeStoreError`
 
@@ -555,7 +606,7 @@ Registrierung und Deregistrierung immer dieselben Topics verwenden.
 | `device._send_rts()` (paho-Thread) | Log `ERROR`, nichts senden, `None` zurück |
 | `wizard._send_prog_telegram()` | Session → `FAILED`, Exception weiterwerfen |
 | REST-API | Middleware `store_error_middleware` (`web/server.py`) → HTTP 503 `{"error", "message"}` |
-| `main.py` beim Start | Log `ERROR`, keine Geräte registrieren, Gateway-Status „Fehler: …" |
+| `main.py` beim Start | Log `ERROR`, keine Geräte registrieren, `cul2mqtt/gateway/status` = „Fehler: …" (Topic hat keine HA-Entität) |
 | `mqtt_client._on_message()` | Sicherheitsnetz: jede Handler-Exception wird geloggt, paho-Thread überlebt |
 
 ### Gateway TX-Logging
@@ -649,15 +700,22 @@ Bei Änderungen an bestehenden Dateien: Type Hints und Docstrings nur für
 ## Release-Prozess (IMMER in dieser Reihenfolge)
 
 1. version in `somfy-rts/config.yaml` auf neue Version setzen
-2. `git cliff --unreleased --tag vX.Y.Z -o somfy-rts/CHANGELOG.md`
+2. `git cliff --tag vX.Y.Z -o somfy-rts/CHANGELOG.md`
+   (**ohne** `--unreleased` — `-o` überschreibt die Datei, sie wird aus der kompletten
+   Historie neu erzeugt; git-cliff: `pip install git-cliff`)
 3. `git add -A`
 4. `git commit -m "chore: release X.Y.Z"`
 5. `git tag vX.Y.Z`
-6. `git push origin main`
-7. `git push origin vX.Y.Z`
+6. `git push origin vX.Y.Z` → warten bis der Workflow grün ist (`gh run watch`)
+7. `git push origin main` — erst jetzt sieht HA die neue Version; das Image existiert dann schon
 
 **NIEMALS** einen Tag setzen ohne vorher die Version in `config.yaml` aktualisiert zu haben.
 Tag und `config.yaml` version müssen **IMMER** übereinstimmen.
+Tag und Push nur nach ausdrücklicher Bestätigung durch den Maintainer.
+
+**Rollback:** Kein Downgrade per HA-Backup-Restore (setzt `somfy_codes.json` auf alte
+Rolling Codes zurück → Motoren ignorieren Befehle). Stattdessen Vorwärts-Fix: `git revert`
+der fehlerhaften Commits und neue Patch-Version releasen.
 
 ---
 
@@ -678,6 +736,9 @@ Tag und `config.yaml` version müssen **IMMER** übereinstimmen.
 - `Yr{n}` immer **vor** `YsA0…` senden — `build_rts_sequence(repeat=n)` macht das automatisch
 - RC **atomar** speichern (`tempfile` + `os.replace()`) **vor** dem Senden
 - `log_rts_frame()` **nach** `send_raw()` aufrufen
+- `build_rts_sequence()` + `send_raw()`-Loop unter `with TX_LOCK:`
+- Jedes `_load()` → ändern → `_save_atomic()` unter `with store_lock():`
+- `RollingCodeStoreError` beim Aufrufer behandeln (nie in einen Thread entkommen lassen)
 - `pytest` nach jeder Änderung ausführen — alle Tests müssen grün bleiben
 - `CLAUDE.md` und `DOCS.md` im **gleichen Commit** wie Code-Änderungen aktualisieren
 - Approach kurz beschreiben bevor Code geschrieben wird
@@ -709,7 +770,11 @@ Tag und `config.yaml` version müssen **IMMER** übereinstimmen.
 
 ## Entwicklungs-Hinweise
 
-- Lokaler Test: `OPTIONS_PATH=./test_options.json SOMFY_CODES_PATH=./test_codes.json python -m somfy_rts.main`
+- Tests: `cd somfy-rts && pytest` (Fixture `tmp_codes_path` isoliert `somfy_codes.json`)
+- Lokaler Lauf ohne Hardware (aus `somfy-rts/`):
+  `SOMFY_SIMULATION_MODE=true SOMFY_CODES_PATH=./test_codes.json python -m somfy_rts.main`
+  (Config kommt aus `SOMFY_*`-Env-Variablen, siehe `config.py`)
+- culfw/a-culfw können Somfy RTS nur senden, nicht empfangen (`tools/cul_sniff.py` zum Prüfen)
 - culfw antwortet auf `V\n` mit Versions-String
 - Rolling Code Datei NIE manuell löschen → Neu-Pairing nötig
 - **Branch-Regel:** Immer direkt auf `main` arbeiten. Kein Worktree, kein `claude/*`-Branch. Alle Commits gehen direkt auf `main`.
