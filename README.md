@@ -15,9 +15,21 @@ und **MQTT**.
 
 ## Apps in diesem Repository
 
-| App (ehemals Add-on) | Version | Beschreibung |
-|----------------------|---------|--------------|
-| [Somfy RTS](somfy-rts/DOCS.md) | 0.3.14 | Steuerung von Somfy RTS Geräten via NanoCUL/culfw |
+| App (ehemals Add-on) | Beschreibung |
+|----------------------|--------------|
+| [Somfy RTS](somfy-rts/DOCS.md) | Steuerung von Somfy RTS Geräten via NanoCUL/culfw |
+
+Aktuelle Version: siehe Release-Badge oben bzw. [Releases](https://github.com/isi07/hassio-somfy-rts/releases)
+und [CHANGELOG](somfy-rts/CHANGELOG.md).
+
+### Funktionen
+
+- **Anlern-Wizard** in der Web-UI (Ingress) — Motor ohne Konfigurationsdateien anlernen
+- **Import** bereits angelernter Geräte (z. B. aus ioBroker) mit Adresse und Rolling Code
+- **MQTT Discovery** — Geräte erscheinen automatisch in Home Assistant, wahlweise als
+  Cover/Light/Switch (Modus A) oder als Buttons für Template Covers (Modus B)
+- **MY-Position**, Lamellensteuerung (Jalousien), PROG-Funktionen direkt aus HA
+- **Rolling Codes ausfallsicher** gespeichert — Senden nur, wenn der Code persistiert ist
 
 ---
 
@@ -52,30 +64,36 @@ address_prefix: "A000"      # Präfix für automatisch generierte Adressen
 log_level: info
 ```
 
+Weitere Optionen (Simulation ohne Hardware, Frame-Log, Zeitzone, Debug-Modus) stehen in
+[DOCS.md](somfy-rts/DOCS.md#konfiguration).
+
 Vollständige Dokumentation: [DOCS.md](somfy-rts/DOCS.md)
 
 ---
 
 ## Hardware-Voraussetzungen
 
-- **NanoCUL USB-Stick** mit culfw-Firmware (**433,42 MHz** — nicht 433,92 MHz!)
-  - Verfügbar z.B. bei busware.de oder als DIY-Bausatz
-  - culfw muss bereits geflasht sein
+- **NanoCUL USB-Stick** (433 MHz) mit culfw-Firmware (**433,42 MHz** — nicht 433,92 MHz!)
+  - culfw muss bereits geflasht sein, **mit Somfy-RTS-Unterstützung** (`HAS_SOMFY_RTS` —
+    im Standard-Build von a-culfw für den nanoCUL deaktiviert)
+  - Die App **sendet** nur; culfw kann Somfy-Funk nicht empfangen (kein Rückkanal)
+- **MQTT Broker**, z. B. die Mosquitto App
 - Somfy RTS kompatible Geräte (Motoren mit dem RTS-Protokoll)
 
 ---
 
 ## Unterstützte Gerätetypen
 
-| Typ | HA Geräteklasse | Beispiel |
-|-----|----------------|---------|
-| `awning` | awning | Markise |
-| `shutter` | shutter | Rollladen |
-| `blind` | blind | Jalousie / Raffstore |
-| `screen` | shade | Insektenschutzrollo |
-| `gate` | gate | Garagentor / Tor |
-| `light` | — | Somfy-kompatibles Licht |
-| `heater` | — | Heizung |
+| Typ | HA Entität (Modus A) | Beispiel |
+|-----|---------------------|---------|
+| `awning` | Cover (awning) | Markise |
+| `shutter` | Cover (shutter) | Rollladen |
+| `blind` | Cover (blind) + MY Auf/Runter | Jalousie / Raffstore |
+| `screen` | Cover (shade) | Insektenschutzrollo |
+| `gate` | Cover (gate) | Garagentor / Tor |
+| `light` | Light (Ein/Aus) | Somfy Lighting Slim Receiver |
+| `heater` | Switch (Ein/Aus) | Somfy Heat Receiver |
+| `light_dimmer` | — (nur Modus B) | Somfy Lighting Dimmer |
 
 ---
 
@@ -93,7 +111,8 @@ Home Assistant
      │           │
      ▼           ▼
  433,42 MHz   HA Entitäten
- Funk-Signal  (Cover / Buttons)
+ Funk-Signal  (Cover / Light / Switch /
+     │         Buttons / Sensoren)
      │
      ▼
  Somfy RTS Motor

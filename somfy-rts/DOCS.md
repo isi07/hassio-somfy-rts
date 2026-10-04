@@ -2,7 +2,9 @@
 
 ## Voraussetzungen
 
-- **NanoCUL USB-Stick** mit culfw-Firmware  
+- **NanoCUL USB-Stick** mit culfw-Firmware **mit Somfy-RTS-Unterstützung**
+  (Build-Option `HAS_SOMFY_RTS`; im Standard-Build von a-culfw für den nanoCUL ist sie
+  deaktiviert)
   **WICHTIG: 433,42 MHz — nicht 433,92 MHz!** Falsche Frequenz = Motor reagiert nicht.
 - **MQTT Broker** (z.B. die Mosquitto App für Home Assistant)
 - Home Assistant 2024.11.0 oder neuer
@@ -40,6 +42,11 @@ Alle Optionen werden unter **Konfiguration** in der App eingestellt:
 | `mqtt_password` | `""` | MQTT Passwort |
 | `address_prefix` | `A000` | 4-stelliger Hex-Präfix für neue Geräteadressen |
 | `log_level` | `info` | Log-Level: `debug` / `info` / `warning` / `error` |
+| `log_format` | `text` | Format des RTS-Frame-Logs: `text` / `json` |
+| `simulation_mode` | `false` | Ohne Hardware testen — Befehle werden nur geloggt, nicht gesendet |
+| `file_logging` | `false` | Frame-Log zusätzlich nach `/share/somfy_rts/rts_frames.log` schreiben |
+| `timezone` | `Europe/Berlin` | Zeitzone für Log-Zeitstempel |
+| `debug_mode` | `false` | Erweiterte Steuerung in der Web-UI (beliebiger Befehl mit freiem Repeat-Wert) |
 
 ### USB-Port ermitteln
 
@@ -50,6 +57,16 @@ oder im HA Terminal: `ls /dev/ttyACM* /dev/ttyUSB*`
 
 Geräte werden **nicht** in der Konfiguration eingetragen, sondern automatisch
 durch den Anlern-Wizard in `/data/somfy_codes.json` verwaltet.
+
+### Web-UI
+
+Die App hat eine eigene Oberfläche (Seitenleiste **Somfy RTS** bzw. **App → Web-UI öffnen**):
+
+- **Geräte:** alle Geräte mit Auf / Stop / Ab, MY, PROG Lang / PROG Anlern, Löschen
+- **Importieren:** bereits angelerntes Gerät mit bekannter Adresse und Rolling Code übernehmen
+- **Anlern-Wizard:** neues Gerät Schritt für Schritt anlernen
+- **Logs:** die letzten gesendeten RTS-Frames
+- **Einstellungen:** aktuelle Konfiguration (Änderungen in der App-Konfiguration)
 
 ---
 
@@ -84,7 +101,11 @@ Die App unterstützt zwei Betriebsmodi pro Gerät:
 | Modus | HA Discovery | Verwendung |
 |-------|-------------|-----------|
 | **A** | 1× Cover / Light / Switch-Entität (optimistisch) | Direkte Steuerung, einfachste Einrichtung |
-| **B** | 3–5× Button + 2× Diagnose-Sensor | Für Template Covers mit Blueprints |
+| **B** | Buttons Auf / Zu / Stop | Für Template Covers und Automationen |
+
+In **beiden** Modi kommen hinzu: Button **MY**, Buttons **PROG Lang** / **PROG Anlern**
+(unter *Konfiguration*), Sensoren **Rolling Code**, **Letzter Befehl** und **Adresse**
+(unter *Diagnose*); bei `blind` zusätzlich **MY Auf** / **MY Runter**.
 
 **Modus A** eignet sich für die meisten Anwendungsfälle — auch für Blueprints.  
 **Modus B** eignet sich für fortgeschrittene Automatisierungen, die direkt auf
@@ -104,24 +125,26 @@ Der Motor muss sich in Reichweite des NanoCUL befinden (~30 m Freifeld).
 
 ### Schritt-für-Schritt
 
-1. **Motor in Programmiermodus versetzen**  
-   `PROG`-Taste der Original-Fernbedienung **ca. 3 Sekunden** halten, bis der
-   Motor kurz auf und ab fährt (Bestätigungsbewegung).
+1. **Wizard in der Web-UI starten**
+   Gerätename, Gerätetyp und Modus (A/B) wählen. Der Wizard erzeugt eine eindeutige
+   6-stellige Hex-Adresse (Format: `<address_prefix><lfd. Nummer>`, z.B. `A00001`).
 
-2. **Wizard in Home Assistant starten**  
-   Der Wizard ist über die App-Ingress-Seite erreichbar.
-   Er generiert automatisch eine eindeutige 6-stellige Hex-Adresse
-   (Format: `<address_prefix><lfd. Nummer>`, z.B. `A00001`).
+2. **Motor in den Anlernmodus versetzen** — eine der beiden Varianten:
+   - **Original-Fernbedienung:** `PROG`-Taste **ca. 3 Sekunden** halten, bis der Motor
+     kurz auf und ab fährt
+   - **Im Wizard:** **⏱ Motor in Anlernmodus** (PROG Lang). Hinweis: Somfy-Motoren
+     reagieren auf einen langen PROG-Druck normalerweise nur von einem bereits angelernten
+     Sender — bei einem neuen Gerät im Zweifel die Original-Fernbedienung verwenden
 
-3. **PROG-Signal senden**  
-   Der Wizard sendet das PROG-Telegramm (CMD `0x8`) innerhalb von 2 Minuten
-   nach dem Motor-Programmiermodus-Start.
+3. **PROG senden**
+   **📡 PROG senden** lernt den virtuellen Sender der App am Motor an
+   (innerhalb von 2 Minuten nach Schritt 2).
 
-4. **Bestätigung abwarten**  
-   Motor bestätigt das Pairing mit einer kurzen Auf-Ab-Bewegung.
+4. **Bestätigen**
+   Der Motor bestätigt mit einer kurzen Auf-Ab-Bewegung → im Wizard **✓ Bestätigen**.
 
-5. **Fertig**  
-   Das Gerät erscheint in Home Assistant unter  
+5. **Fertig**
+   Das Gerät erscheint sofort in Home Assistant unter
    **Einstellungen → Geräte & Dienste → MQTT**.
 
 ### Adress-Präfix
@@ -135,24 +158,16 @@ zu vermeiden.
 
 ## ioBroker Migration
 
-Geräte, die bereits über ioBroker angelernt wurden, können ohne erneutes
-Pairing übernommen werden:
+Geräte, die bereits über ioBroker (oder ein anderes System) angelernt wurden, können
+ohne erneutes Pairing übernommen werden:
 
-1. Adresse und Rolling Code aus ioBroker notieren  
-   (Rolling Code mit einem Sicherheitspuffer von **+10** erhöhen)
+1. Adresse und letzten Rolling Code aus ioBroker notieren
+2. In der Web-UI **↑ Importieren** wählen: Name, Gerätetyp, Adresse, Rolling Code
+   (**letzter Wert + 10** als Sicherheitspuffer) und Modus eintragen
+3. **Importieren** — das Gerät erscheint sofort in Home Assistant, kein Neustart nötig
 
-2. Import via Python (einmalig im App-Terminal ausführen):
-   ```python
-   from somfy_rts.wizard import PairingWizard
-   PairingWizard.import_from_iobroker(
-       name="Wohnzimmer Markise",
-       device_type="awning",
-       address="A1B2C3",   # aus ioBroker
-       rolling_code=142,   # letzter ioBroker-Wert + 10
-   )
-   ```
-
-3. App neu starten — Gerät erscheint sofort in Home Assistant
+Alternativ per REST: `POST /api/devices/import` mit
+`{"name", "device_type", "address", "rolling_code", "mode"}`.
 
 **Wichtig:** Der Rolling Code muss ≥ dem letzten von ioBroker verwendeten Wert sein.
 Ein zu niedriger Rolling Code bewirkt, dass der Motor alle Befehle ignoriert.
@@ -288,34 +303,45 @@ template:
 
 | Topic | Richtung | Inhalt |
 |-------|----------|--------|
-| `homeassistant/cover/<id>/config` | Publish | Discovery Cover (retain) |
+| `homeassistant/cover/<id>/config` | Publish | Discovery Cover — bzw. `light/…` / `switch/…` je Gerätetyp (retain) |
+| `homeassistant/button/<id>_my/config` | Publish | Discovery MY-Button (retain) |
+| `homeassistant/sensor/<id>_{rolling_code,last_command,device_address}/config` | Publish | Discovery Diagnose-Sensoren (retain) |
 | `homeassistant/button/<id>_prog_long/config` | Publish | Discovery PROG Lang (retain) |
 | `homeassistant/button/<id>_prog_pair/config` | Publish | Discovery PROG Anlern (retain) |
 | `somfy/<slug>/state` | Publish | `open` / `closed` / `stopped` (retain) |
-| `somfy/<slug>/set` | Subscribe | `OPEN` / `CLOSE` / `STOP` |
+| `somfy/<slug>/set` | Subscribe | `OPEN` / `CLOSE` / `STOP` / `MY` (light/switch: `ON` / `OFF`) |
 | `somfy/<slug>/cmd` | Subscribe | `PROG_LONG` / `PROG_PAIR` |
 | `somfy/<slug>/rolling_code` | Publish | Aktueller Rolling Code (retain) |
-| `somfy/<slug>/last_command` | Publish | `OPEN` / `CLOSE` / `STOP` / `PROG` (retain) |
+| `somfy/<slug>/last_command` | Publish | `OPEN` / `CLOSE` / `STOP` / `MY` / `PROG` (retain) |
+| `somfy/<slug>/last_command_attr` | Publish | `{"raw_frame": "YsA0…"}` (retain) |
+| `somfy/<slug>/device_address` | Publish | Adresse des virtuellen Senders (retain) |
 
 ### Modus B (Buttons + PROG-Buttons + Diagnose)
 
 | Topic | Richtung | Inhalt |
 |-------|----------|--------|
+| `homeassistant/button/<id>_{auf,zu,stop,my}/config` | Publish | Discovery Buttons (retain) |
+| `homeassistant/sensor/<id>_{rolling_code,last_command,device_address}/config` | Publish | Discovery Diagnose-Sensoren (retain) |
 | `homeassistant/button/<id>_prog_long/config` | Publish | Discovery PROG Lang (retain) |
 | `homeassistant/button/<id>_prog_pair/config` | Publish | Discovery PROG Anlern (retain) |
 | `somfy/<slug>/button/auf` | Subscribe | `PRESS` |
 | `somfy/<slug>/button/zu` | Subscribe | `PRESS` |
 | `somfy/<slug>/button/stop` | Subscribe | `PRESS` |
+| `somfy/<slug>/button/my` | Subscribe | `PRESS` |
 | `somfy/<slug>/cmd` | Subscribe | `PROG_LONG` / `PROG_PAIR` |
 | `somfy/<slug>/rolling_code` | Publish | Aktueller Rolling Code (retain) |
-| `somfy/<slug>/last_command` | Publish | `OPEN` / `CLOSE` / `STOP` / `PROG` (retain) |
+| `somfy/<slug>/last_command` | Publish | `OPEN` / `CLOSE` / `STOP` / `MY` / `PROG` (retain) |
+| `somfy/<slug>/last_command_attr` | Publish | `{"raw_frame": "YsA0…"}` (retain) |
+| `somfy/<slug>/device_address` | Publish | Adresse des virtuellen Senders (retain) |
+
+Bei `blind` zusätzlich `somfy/<slug>/button/my_auf` und `…/my_zu` (`PRESS`).
 
 ### Gateway
 
 | Topic | Inhalt |
 |-------|--------|
-| `cul2mqtt/status` | `online` / `offline` (LWT, retain) |
-| `cul2mqtt/gateway/status` | Verbindungstext |
+| `cul2mqtt/status` | `online` / `offline` (LWT, retain) — HA-Entität `binary_sensor.somfy_rts_gateway_verbindung` |
+| `cul2mqtt/gateway/status` | Statustext (keine HA-Entität) |
 | `cul2mqtt/gateway/port` | USB-Port Pfad |
 | `cul2mqtt/gateway/device_count` | Anzahl angelernte Geräte |
 | `cul2mqtt/gateway/sw_version` | App-Version |
@@ -329,7 +355,8 @@ Die Rolling Codes werden in `/data/somfy_codes.json` gespeichert:
 ```json
 {
   "devices": [
-    {"address": "A00001", "name": "Wohnzimmer Markise", "rolling_code": 42}
+    {"address": "A00001", "name": "Wohnzimmer Markise", "rolling_code": 42,
+     "device_type": "awning", "mode": "A"}
   ],
   "groups": [],
   "settings": {
@@ -353,11 +380,15 @@ Kann der neue Rolling Code nicht gespeichert werden (z. B. Speicher voll), wird
 
 - USB-Gerät prüfen: **App → Info → Hardware** oder im HA Terminal `ls /dev/ttyACM* /dev/ttyUSB*`
 - Anderen USB-Port versuchen
-- culfw-Firmware Version prüfen: `V` über serielle Konsole senden (Antwort: `V 1.67 CUL868...`)
+- culfw-Firmware Version prüfen: Das App-Log zeigt beim Start die Antwort auf `V`
+  (z. B. `NanoCUL verbunden auf /dev/ttyACM0 — V 1.67 nanoCUL433 …`)
 
 ### Motor reagiert nicht
 
 - **433,42 MHz** Firmware auf dem NanoCUL? (nicht 433,92 MHz!)
+- Firmware mit Somfy-RTS-Unterstützung (`HAS_SOMFY_RTS`)? Ohne sie ignoriert der Stick
+  die `Ys…`-Befehle kommentarlos
+- App-Log: Steht bei jedem Befehl `CUL TX: Yr1` und `CUL TX: YsA0…`? Dann wurde gesendet
 - Entfernung zum Motor prüfen (~30 m Freifeld; Betonwände reduzieren Reichweite stark)
 - App-Log auf `PROG_SENT` und `CONFIRMED` prüfen (`log_level: debug` aktivieren)
 
