@@ -2,7 +2,7 @@
 
 ## Inhaltsverzeichnis
 
-- [⚠️ Kritische Invarianten](#kritische-invarianten--vor-jeder-änderung-lesen)
+- [⚠️ Kritische Invarianten](#kritische-invarianten--vor-jeder-änderung-lesen) (RC-Atomizität, Yr{n}, Adressdarstellung)
 - [Projektübersicht](#projektübersicht)
 - [Technischer Stack](#technischer-stack)
 - [Hardware](#hardware)
@@ -83,6 +83,25 @@ with TX_LOCK:
         gateway.send_raw(cmd)
 log_rts_frame(seq, address, action, success=True)   # erst hier: STATUS=OK ist echt
 ```
+
+### 3 · Adressdarstellung nie ändern
+
+Die Adresse hat im ganzen Add-on **eine** Darstellung — die FHEM/culfw-Konvention. Die
+Byte-Umkehr auf Funk (Somfy sendet die Adresse LSB-first) macht **culfw** selbst
+(`somfy_rts.c`: Eingabe-Byte 1 → Frame-Byte 6). Beispiel `A00001`:
+
+| Stelle | Darstellung |
+|---|---|
+| `somfy_codes.json`, Web-UI, Wizard, Import, Sensor `device_address` | `A00001` |
+| culfw-Befehl / `raw_frame` / Frame-Log | `YsA0 20 0001 A00001` |
+| Auf Funk, Frame-Bytes 4–6 | `01 00 A0` |
+| culfw-Echo nach dem Senden (wird nicht gelesen) | `…0001 0100A0` |
+
+- **NIEMALS** die Reihenfolge beim Speichern oder Senden ändern — alle angelernten Motoren
+  würden den virtuellen Sender nicht mehr erkennen (Neu-Anlernen aller Geräte nötig)
+- Eingehende Adressen (culfw-Echo, künftiger Empfang via SIGNALduino/rtl_433) im **Parser**
+  auf diese Darstellung zurückdrehen: `raw[14:16] + raw[12:14] + raw[10:12]` (wie FHEM)
+- Import: Adressen aus Funk-Mitschnitten sind umgedreht und müssen vorher gedreht werden
 
 ---
 

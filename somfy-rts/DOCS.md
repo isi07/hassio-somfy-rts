@@ -157,10 +157,16 @@ Pairing übernommen werden:
 **Wichtig:** Der Rolling Code muss ≥ dem letzten von ioBroker verwendeten Wert sein.
 Ein zu niedriger Rolling Code bewirkt, dass der Motor alle Befehle ignoriert.
 
-**Adress-Format:** Die Adresse wird so wie aus ioBroker, ESPSomfy oder einer anderen
-Quelle übernommen (6 Hex-Zeichen, z.&nbsp;B. `A1B2C3`) direkt in den culfw-Befehl
-eingebaut. Alle gängigen Implementierungen (FHEM/culfw, ESPSomfy, RFLink) verwenden
-dieselbe Darstellung — eine direkte Migration ist daher ohne Konvertierung möglich.
+**Adress-Format:** Die Adresse (6 Hex-Zeichen, z.&nbsp;B. `A1B2C3`) wird unverändert in
+den culfw-Befehl eingebaut — dieselbe Schreibweise wie FHEM und alle Systeme, die über
+culfw senden. Adressen aus solchen Systemen sind daher ohne Konvertierung übertragbar.
+culfw sendet die drei Bytes auf Funk in umgekehrter Reihenfolge (`C3 B2 A1`); das ist
+protokollbedingt korrekt.
+
+- **Funk-Mitschnitte** (Rohdaten eines Empfängers, culfw-Echo `Ys…`) zeigen die
+  umgedrehte Reihenfolge → vor dem Import zurückdrehen (`C3B2A1` → `A1B2C3`)
+- **Andere Systeme** (z.&nbsp;B. ESPSomfy, RFLink) nicht geprüft — im Zweifel mit einem
+  einzelnen Befehl testen; reagiert der Motor nicht, die Byte-Reihenfolge drehen
 
 ---
 
