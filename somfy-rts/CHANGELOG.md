@@ -4,6 +4,46 @@ Alle nennenswerten Änderungen werden hier dokumentiert.
 Format: [Conventional Commits](https://www.conventionalcommits.org/de/)
 
 
+## [0.4.0] - 2026-10-04
+
+### CI/CD
+
+- Build the image on every PR and push, publish only on tags
+
+### Dokumentation
+
+- Document address byte order as a critical invariant
+- Bring README and DOCS.md up to date for 0.4.0
+- Clarify that PROG Lang only works from an already paired sender
+
+### Fehlerbehebungen
+
+- Remove PROG Lang from the pairing wizard
+- Keep retrying the MQTT connection instead of crashing
+- Replace 1x1 placeholder icon and logo with real images
+
+### Neu hinzugefügt
+
+- Add German and English translations for the add-on options
+
+### Refactoring
+
+- Migrate MQTT client to paho-mqtt callback API v2
+- Adopt ruff 0.16 default rules and lint tests and tools
+
+### Sonstiges
+
+- **deps:** Bump docker/setup-qemu-action from 3 to 4
+- **deps:** Bump docker/build-push-action from 6 to 7
+- **deps:** Bump docker/setup-buildx-action from 3 to 4
+- **deps:** Bump actions/checkout from 4 to 7
+- **deps:** Bump actions/setup-python from 6 to 7
+- **docker:** Move base image to Python 3.14 / Alpine 3.24
+- **deps:** Pin all dependencies exactly and group Dependabot updates
+- **deps:** Bump hadolint/hadolint-action from 3.3.0 to 3.5.0
+- Mark tools/cul_sniff.py as executable
+- **docker:** Use HA multi-arch base image pinned to a dated release
+
 ## [0.3.22] - 2026-10-04
 
 ### CI/CD
