@@ -311,3 +311,51 @@ class TestOnMessageSafetyNet:
         msg.topic = "somfy/x/set"
         msg.payload = b"OPEN"
         client._on_message(MagicMock(), None, msg)  # must not raise
+
+
+# ---------- paho-mqtt Callback API v2 ----------
+
+
+def _reason(packet: str, identifier: int):
+    """Build a paho ReasonCode as delivered to v2 callbacks."""
+    from paho.mqtt.packettypes import PacketTypes
+    from paho.mqtt.reasoncodes import ReasonCode
+
+    return ReasonCode(getattr(PacketTypes, packet), identifier=identifier)
+
+
+class TestCallbackApiV2:
+    def test_client_uses_callback_api_v2_without_deprecation_warning(self):
+        import warnings
+
+        from somfy_rts.config import Config
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
+            client = MQTTClient(Config())
+        import paho.mqtt.client as mqtt
+        assert client._client._callback_api_version == mqtt.CallbackAPIVersion.VERSION2
+
+    def test_on_connect_success_publishes_online_and_resubscribes(self, mqtt_client_with_mock):
+        client, mock_paho = mqtt_client_with_mock
+        client._handlers["somfy/x/set"] = MagicMock()
+        client._on_connect(mock_paho, None, MagicMock(), _reason("CONNACK", 0), None)
+        mock_paho.publish.assert_any_call("cul2mqtt/status", "online", retain=True)
+        mock_paho.subscribe.assert_called_once_with("somfy/x/set")
+
+    def test_on_connect_failure_does_not_subscribe(self, mqtt_client_with_mock, caplog):
+        client, mock_paho = mqtt_client_with_mock
+        client._handlers["somfy/x/set"] = MagicMock()
+        client._on_connect(mock_paho, None, MagicMock(), _reason("CONNACK", 135), None)
+        mock_paho.subscribe.assert_not_called()
+        assert "Not authorized" in caplog.text
+
+    def test_on_disconnect_unexpected_logs_warning(self, mqtt_client_with_mock, caplog):
+        client, mock_paho = mqtt_client_with_mock
+        client._on_disconnect(mock_paho, None, MagicMock(), _reason("DISCONNECT", 128), None)
+        assert "MQTT getrennt" in caplog.text
+
+    def test_on_disconnect_normal_is_silent(self, mqtt_client_with_mock, caplog):
+        client, mock_paho = mqtt_client_with_mock
+        client._on_disconnect(mock_paho, None, MagicMock(), _reason("DISCONNECT", 0), None)
+        assert "MQTT getrennt" not in caplog.text

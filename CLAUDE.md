@@ -127,7 +127,7 @@ Jalousien usw.) über einen **NanoCUL USB-Stick** mit **culfw-Firmware** via **M
 | Architekturen | amd64, aarch64 |
 | Sprache | Python 3.14 (CI-Tests `setup-python` und `BUILD_FROM` immer gleich halten) |
 | Protokoll | Somfy RTS (433,42 MHz) über NanoCUL USB (culfw) |
-| Kommunikation | MQTT (paho-mqtt, Thread-Modus `loop_start`) → Home Assistant |
+| Kommunikation | MQTT (paho-mqtt 2.x, **Callback API v2**, Thread-Modus `loop_start`, Auto-Reconnect) → Home Assistant |
 | Web-UI | aiohttp (asyncio), HA Ingress Port 8099 |
 | HA-Integration | MQTT Discovery (Cover/Light/Switch/Button/Sensor-Entitäten) |
 | Config | App-Options → `run.sh` → `SOMFY_*` Env-Variablen → `config.py` |

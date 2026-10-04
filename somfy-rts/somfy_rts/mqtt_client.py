@@ -33,6 +33,8 @@ import time
 from typing import Callable, Dict, Optional
 
 import paho.mqtt.client as mqtt
+from paho.mqtt.properties import Properties
+from paho.mqtt.reasoncodes import ReasonCode
 
 from . import __version__
 from .config import Config, DeviceConfig
@@ -65,7 +67,12 @@ class MQTTClient:
 
     def __init__(self, config: Config) -> None:
         self._config = config
-        self._client = mqtt.Client(client_id="somfy_rts_addon", clean_session=True)
+        # Callback API v2: on_connect/on_disconnect receive ReasonCode + Properties
+        self._client = mqtt.Client(
+            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+            client_id="somfy_rts_addon",
+            clean_session=True,
+        )
         self._handlers: Dict[str, Callable[[str], None]] = {}
 
         if config.mqtt_user:
@@ -544,18 +551,53 @@ class MQTTClient:
         self._client.subscribe(topic)
         self._handlers[topic] = handler
 
-    def _on_connect(self, client: mqtt.Client, userdata: object, flags: dict, rc: int) -> None:
-        if rc == 0:
-            logger.info("MQTT verbunden.")
-            client.publish(LWT_TOPIC, "online", retain=True)
-            for topic in self._handlers:
-                client.subscribe(topic)
-        else:
-            logger.error("MQTT Verbindungsfehler, RC=%d", rc)
+    def _on_connect(
+        self,
+        client: mqtt.Client,
+        userdata: object,
+        flags: mqtt.ConnectFlags,
+        reason_code: ReasonCode,
+        properties: Optional[Properties],
+    ) -> None:
+        """Publish 'online' and (re-)subscribe all command topics after a connect.
 
-    def _on_disconnect(self, client: mqtt.Client, userdata: object, rc: int) -> None:
-        if rc != 0:
-            logger.warning("MQTT getrennt (RC=%d) — paho reconnect...", rc)
+        Args:
+            client: paho client.
+            userdata: Unused.
+            flags: CONNACK flags.
+            reason_code: CONNACK reason code (failure e.g. "Not authorized").
+            properties: MQTT v5 properties (None for MQTT 3.1.1).
+        """
+        if reason_code.is_failure:
+            logger.error("MQTT Verbindungsfehler: %s (RC=%d)", reason_code, reason_code.value)
+            return
+        logger.info("MQTT verbunden.")
+        client.publish(LWT_TOPIC, "online", retain=True)
+        for topic in self._handlers:
+            client.subscribe(topic)
+
+    def _on_disconnect(
+        self,
+        client: mqtt.Client,
+        userdata: object,
+        flags: mqtt.DisconnectFlags,
+        reason_code: ReasonCode,
+        properties: Optional[Properties],
+    ) -> None:
+        """Log unexpected disconnects; paho reconnects automatically (loop_start).
+
+        Args:
+            client: paho client.
+            userdata: Unused.
+            flags: Disconnect flags.
+            reason_code: Reason code; success (0) = normal, requested disconnect.
+            properties: MQTT v5 properties (None for MQTT 3.1.1).
+        """
+        if reason_code.is_failure:
+            logger.warning(
+                "MQTT getrennt: %s (RC=%d) — paho reconnect...",
+                reason_code, reason_code.value,
+            )
 
     def _on_message(self, client: mqtt.Client, userdata: object, msg: mqtt.MQTTMessage) -> None:
         topic = msg.topic
