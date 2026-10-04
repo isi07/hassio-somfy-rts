@@ -4,6 +4,21 @@ Alle nennenswerten Änderungen werden hier dokumentiert.
 Format: [Conventional Commits](https://www.conventionalcommits.org/de/)
 
 
+## [0.5.0] - 2026-10-04
+
+### Fehlerbehebungen
+
+- Close the direct web UI port 8099 by default
+- Resend discovery and states after reconnect and HA restart
+- Use a Docker HEALTHCHECK instead of the obsolete watchdog key
+- Use exec form for the HEALTHCHECK command (hadolint DL3025)
+
+### Neu hinzugefügt
+
+- Support the HA app watchdog and start the web UI first
+- MQTT over TLS with optional certificate verification
+- Explain standard MQTT ports on both settings pages
+
 ## [0.4.0] - 2026-10-04
 
 ### CI/CD
