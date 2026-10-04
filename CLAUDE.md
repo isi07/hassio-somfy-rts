@@ -250,6 +250,8 @@ hassio-somfy-rts/
 │   └── cul_sniff.py                   # Diagnose: liest CUL-Rohzeilen (nicht im Image)
 ├── somfy-rts/                         # Die eigentliche App
 │   ├── config.yaml                    # HA App-Schema + version
+│   ├── icon.png / logo.png            # 128×128 bzw. 250×100 (HA-Vorgabe), eigenes Motiv
+│   ├── dark_logo.png                  # Logo mit heller Schrift für dunkles HA-Design
 │   ├── Dockerfile
 │   ├── requirements.txt               # pyserial, paho-mqtt, aiohttp
 │   ├── requirements-test.txt          # pytest, pytest-asyncio, pytest-aiohttp, pytest-mock
