@@ -491,7 +491,8 @@ Vollständige YAML-Beispiele für Modus A und Modus B in **DOCS.md**.
 
 Workflow `.github/workflows/build.yaml`, Job-Kette `lint → build → manifest → release`:
 
-- **lint** (jeder Push auf `main`, jeder PR, jeder Tag): ruff, **pytest**, yamllint,
+- **lint** (jeder Push auf `main`, jeder PR, jeder Tag): ruff (gepinnt auf `0.15.10` —
+  lokal dieselbe Version verwenden; ab 0.16 gelten zusätzliche Standardregeln), **pytest**, yamllint,
   shellcheck, hadolint, JSON-Check, HA-Add-on-Linter, actionlint
 - **build** (nur Tag `v*`): Images pro Arch, Version aus `config.yaml`
 - **manifest**: Multi-Arch-Image `ghcr.io/isi07/somfy-rts:<version>` + `:latest`

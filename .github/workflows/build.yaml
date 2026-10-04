@@ -24,7 +24,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install ruff
+          # Pinned: ruff 0.16 enables additional default rules (UP, RUF, BLE, ...)
+          pip install "ruff==0.15.10"
           pip install -r somfy-rts/requirements.txt
 
       - name: Run ruff
