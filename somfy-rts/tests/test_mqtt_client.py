@@ -345,7 +345,7 @@ class TestCallbackApiV2:
         client._handlers["somfy/x/set"] = MagicMock()
         client._on_connect(mock_paho, None, MagicMock(), _reason("CONNACK", 0), None)
         mock_paho.publish.assert_any_call("cul2mqtt/status", "online", retain=True)
-        mock_paho.subscribe.assert_called_once_with("somfy/x/set")
+        mock_paho.subscribe.assert_any_call("somfy/x/set")
 
     def test_on_connect_failure_does_not_subscribe(self, mqtt_client_with_mock, caplog):
         client, mock_paho = mqtt_client_with_mock
@@ -441,3 +441,64 @@ class TestReconnect:
             client._on_connect(mock_paho, None, MagicMock(), _reason("CONNACK", 0), None)
         assert "MQTT verbunden mit core-mosquitto:1883 nach 9 s (1 fehlgeschlagene Versuche)" in caplog.text
         assert "wieder verbunden" not in caplog.text
+
+
+# ---------- Republish retained state after reconnect / HA restart ----------
+
+
+class TestRepublish:
+    def _published(self, mock_paho) -> list[tuple[str, str]]:
+        return [(c.args[0], c.args[1]) for c in mock_paho.publish.call_args_list]
+
+    def test_reconnect_republishes_discovery_and_state(self, mqtt_client_with_mock, device_a):
+        client, mock_paho = mqtt_client_with_mock
+        client.register_device(device_a, MagicMock())
+        client.publish_state(device_a, "open")
+        before = set(self._published(mock_paho))
+        mock_paho.publish.reset_mock()
+        client._on_connect(mock_paho, None, MagicMock(), _reason("CONNACK", 0), None)
+        after = set(self._published(mock_paho))
+        assert before <= after  # every retained message is sent again
+
+    def test_cleared_topics_are_not_republished(self, mqtt_client_with_mock, device_a):
+        client, mock_paho = mqtt_client_with_mock
+        client.register_device(device_a, MagicMock())
+        client.unregister_device(device_a)
+        mock_paho.publish.reset_mock()
+        client._on_connect(mock_paho, None, MagicMock(), _reason("CONNACK", 0), None)
+        republished = {t for t, _ in self._published(mock_paho)}
+        assert not republished & set(discovery_topics(device_a))
+
+    def test_lwt_is_not_cached(self, mqtt_client_with_mock):
+        client, mock_paho = mqtt_client_with_mock
+        client.disconnect()
+        mock_paho.publish.reset_mock()
+        client._on_connect(mock_paho, None, MagicMock(), _reason("CONNACK", 0), None)
+        assert self._published(mock_paho) == [("cul2mqtt/status", "online")]
+
+    def test_ha_birth_message_triggers_republish(self, mqtt_client_with_mock, device_a):
+        client, mock_paho = mqtt_client_with_mock
+        client.register_device(device_a, MagicMock())
+        mock_paho.publish.reset_mock()
+        msg = MagicMock()
+        msg.topic = "homeassistant/status"
+        msg.payload = b"online"
+        client._on_message(mock_paho, None, msg)
+        republished = {t for t, _ in self._published(mock_paho)}
+        assert set(discovery_topics(device_a)) <= republished
+
+    def test_ha_offline_message_does_not_republish(self, mqtt_client_with_mock, device_a):
+        client, mock_paho = mqtt_client_with_mock
+        client.register_device(device_a, MagicMock())
+        mock_paho.publish.reset_mock()
+        msg = MagicMock()
+        msg.topic = "homeassistant/status"
+        msg.payload = b"offline"
+        client._on_message(mock_paho, None, msg)
+        mock_paho.publish.assert_not_called()
+
+    def test_ha_status_is_subscribed_on_connect(self, mqtt_client_with_mock):
+        client, mock_paho = mqtt_client_with_mock
+        client._on_connect(mock_paho, None, MagicMock(), _reason("CONNACK", 0), None)
+        subscribed = {c.args[0] for c in mock_paho.subscribe.call_args_list}
+        assert "homeassistant/status" in subscribed

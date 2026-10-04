@@ -29,6 +29,7 @@ Origin-Block in allen Discovery-Payloads.
 
 import json
 import logging
+import threading
 import time
 from collections.abc import Callable
 
@@ -49,6 +50,8 @@ GW_TOPIC_BASE = "cul2mqtt/gateway"
 RECONNECT_MIN_DELAY_S = 1
 RECONNECT_MAX_DELAY_S = 60
 MQTT_KEEPALIVE_S = 60
+# Home Assistant announces its (re)start here ("online"); we then resend discovery
+HA_STATUS_TOPIC = f"{HA_DISCOVERY}/status"
 MQTT_TOPIC_PREFIX = "somfy"
 
 ORIGIN = {
@@ -83,6 +86,12 @@ class MQTTClient:
         self._outage_started: float | None = None
         self._failed_attempts = 0
         self._ever_connected = False
+        # Last payload of every retained topic we published (except the LWT).
+        # Resent after a reconnect and on HA's birth message, so entities and
+        # states survive a broker that lost its retained messages.
+        self._retained: dict[str, str] = {}
+        self._retained_lock = threading.Lock()
+        self._handlers[HA_STATUS_TOPIC] = self._on_ha_status
 
         if config.mqtt_user:
             self._client.username_pw_set(config.mqtt_user, config.mqtt_password)
@@ -145,7 +154,7 @@ class MQTTClient:
 
         # Verbindungsstatus als binary_sensor — kein availability-Block, liest LWT direkt.
         # Altes sensor-Topic (aus Vorversionen) wird gecleart um Duplikate zu vermeiden.
-        self._client.publish(
+        self._publish_retained(
             f"{HA_DISCOVERY}/sensor/somfy_rts_gw_status/config", "", retain=True
         )
         conn_payload: dict = {
@@ -162,7 +171,7 @@ class MQTTClient:
             # Kein availability-Block — Entität bleibt immer verfügbar,
             # Status wechselt zwischen online/offline via LWT.
         }
-        self._client.publish(
+        self._publish_retained(
             f"{HA_DISCOVERY}/binary_sensor/somfy_rts_gw_status/config",
             json.dumps(conn_payload),
             retain=True,
@@ -189,20 +198,20 @@ class MQTTClient:
             if unit:
                 payload["unit_of_measurement"] = unit
             disc_topic = f"{HA_DISCOVERY}/sensor/somfy_rts_gw_{sensor_id}/config"
-            self._client.publish(disc_topic, json.dumps(payload), retain=True)
+            self._publish_retained(disc_topic, json.dumps(payload), retain=True)
 
         # Initiale Werte (LWT wird von connect() auf "online" gesetzt)
-        self._client.publish(f"{GW_TOPIC_BASE}/port",         port_name,         retain=True)
-        self._client.publish(f"{GW_TOPIC_BASE}/device_count", str(device_count), retain=True)
-        self._client.publish(f"{GW_TOPIC_BASE}/sw_version",   __version__,       retain=True)
+        self._publish_retained(f"{GW_TOPIC_BASE}/port",         port_name,         retain=True)
+        self._publish_retained(f"{GW_TOPIC_BASE}/device_count", str(device_count), retain=True)
+        self._publish_retained(f"{GW_TOPIC_BASE}/sw_version",   __version__,       retain=True)
         logger.info("Gateway Discovery veröffentlicht (%d Gerät(e)).", device_count)
 
     def update_gateway_status(self, status: str) -> None:
-        self._client.publish(f"{GW_TOPIC_BASE}/status", status, retain=True)
+        self._publish_retained(f"{GW_TOPIC_BASE}/status", status, retain=True)
 
     def update_device_count(self, count: int) -> None:
         """Aktualisiert den Geräteanzahl-Sensor am Gateway (z.B. nach Import oder Löschen)."""
-        self._client.publish(f"{GW_TOPIC_BASE}/device_count", str(count), retain=True)
+        self._publish_retained(f"{GW_TOPIC_BASE}/device_count", str(count), retain=True)
 
     # ---------- Geräte-Registration ----------
 
@@ -268,7 +277,7 @@ class MQTTClient:
             if device_class:
                 cover_payload["device_class"] = device_class
             disc_topic = f"{HA_DISCOVERY}/cover/{device.unique_id_base}/config"
-            self._client.publish(disc_topic, json.dumps(cover_payload), retain=True)
+            self._publish_retained(disc_topic, json.dumps(cover_payload), retain=True)
 
         elif ha_platform in ("light", "switch"):
             # Light- oder Switch-Entity: HA sendet "ON"/"OFF", Device übersetzt intern nach OPEN/CLOSE
@@ -287,7 +296,7 @@ class MQTTClient:
                 "origin": ORIGIN,
             }
             disc_topic = f"{HA_DISCOVERY}/{ha_platform}/{device.unique_id_base}/config"
-            self._client.publish(disc_topic, json.dumps(entity_payload), retain=True)
+            self._publish_retained(disc_topic, json.dumps(entity_payload), retain=True)
         # ha_platform is None (z.B. light_dimmer): kein Haupt-Entity registrieren
 
         # 3 Diagnose-Sensoren (für alle ha_platform-Werte inkl. None)
@@ -310,7 +319,7 @@ class MQTTClient:
             if attr_topic:
                 s_payload["json_attributes_topic"] = attr_topic
             s_disc = f"{HA_DISCOVERY}/sensor/{device.unique_id_base}_{sensor_id}/config"
-            self._client.publish(s_disc, json.dumps(s_payload), retain=True)
+            self._publish_retained(s_disc, json.dumps(s_payload), retain=True)
 
         self._subscribe(command_topic, command_handler)
 
@@ -326,7 +335,7 @@ class MQTTClient:
             "device": sub_dev,
             "origin": ORIGIN,
         }
-        self._client.publish(
+        self._publish_retained(
             f"{HA_DISCOVERY}/button/{device.unique_id_base}_my/config",
             json.dumps(my_payload), retain=True,
         )
@@ -352,7 +361,7 @@ class MQTTClient:
                     "device": sub_dev,
                     "origin": ORIGIN,
                 }
-                self._client.publish(
+                self._publish_retained(
                     f"{HA_DISCOVERY}/button/{device.unique_id_base}_{action_key}/config",
                     json.dumps(tilt_payload), retain=True,
                 )
@@ -412,7 +421,7 @@ class MQTTClient:
                 "origin": ORIGIN,
             }
             disc_topic = f"{HA_DISCOVERY}/button/{device.unique_id_base}_{action_key}/config"
-            self._client.publish(disc_topic, json.dumps(payload), retain=True)
+            self._publish_retained(disc_topic, json.dumps(payload), retain=True)
 
             self._subscribe(cmd_topic, lambda _payload, a=rts_action: command_handler(a))
 
@@ -437,7 +446,7 @@ class MQTTClient:
                     "origin": ORIGIN,
                 }
                 disc_topic = f"{HA_DISCOVERY}/button/{device.unique_id_base}_{action_key}/config"
-                self._client.publish(disc_topic, json.dumps(payload), retain=True)
+                self._publish_retained(disc_topic, json.dumps(payload), retain=True)
                 self._subscribe(cmd_topic, lambda _payload, a=rts_action: command_handler(a))
 
         # MY Button (Lieblingsposition) — alle Gerätetypen, entity_category: config
@@ -453,7 +462,7 @@ class MQTTClient:
             "device": sub_dev,
             "origin": ORIGIN,
         }
-        self._client.publish(
+        self._publish_retained(
             f"{HA_DISCOVERY}/button/{device.unique_id_base}_my/config",
             json.dumps(my_b_payload), retain=True,
         )
@@ -478,7 +487,7 @@ class MQTTClient:
             if attr_topic:
                 s_payload["json_attributes_topic"] = attr_topic
             disc_topic = f"{HA_DISCOVERY}/sensor/{device.unique_id_base}_{sensor_id}/config"
-            self._client.publish(disc_topic, json.dumps(s_payload), retain=True)
+            self._publish_retained(disc_topic, json.dumps(s_payload), retain=True)
 
         # PROG Lang + PROG Anlern Buttons (entity_category: config) — beide Modi
         self._register_prog_buttons(device, command_handler, sub_dev)
@@ -522,7 +531,7 @@ class MQTTClient:
                 "origin": ORIGIN,
             }
             disc_topic = f"{HA_DISCOVERY}/button/{device.unique_id_base}_{btn_key}/config"
-            self._client.publish(disc_topic, json.dumps(btn_payload), retain=True)
+            self._publish_retained(disc_topic, json.dumps(btn_payload), retain=True)
 
         self._subscribe(cmd_topic, command_handler)
 
@@ -539,9 +548,9 @@ class MQTTClient:
             device: Gerätekonfiguration des zu löschenden Geräts.
         """
         for topic in discovery_topics(device):
-            self._client.publish(topic, "", retain=True)
+            self._publish_retained(topic, "", retain=True)
         for topic in state_topics(device):
-            self._client.publish(topic, "", retain=True)
+            self._publish_retained(topic, "", retain=True)
         logger.info(
             "Discovery- und State-Topics für '%s' (%s) gecleart.", device.name, device.address
         )
@@ -551,12 +560,12 @@ class MQTTClient:
     def publish_state(self, device: DeviceConfig, state: str) -> None:
         """Modus A: Veröffentlicht Cover-Status (open/closed/stopped)."""
         topic = f"{MQTT_TOPIC_PREFIX}/{device.slug}/state"
-        self._client.publish(topic, state, retain=True)
+        self._publish_retained(topic, state, retain=True)
 
     def publish_diagnostic(self, device: DeviceConfig, key: str, value: str) -> None:
         """Aktualisiert einen Diagnose-Sensor (rolling_code / last_command / device_address)."""
         topic = f"{MQTT_TOPIC_PREFIX}/{device.slug}/{key}"
-        self._client.publish(topic, value, retain=True)
+        self._publish_retained(topic, value, retain=True)
 
     def publish_json_attributes(self, device: DeviceConfig, key: str, attrs: dict) -> None:
         """Veröffentlicht JSON-Attribute für einen Sensor (z.B. raw_frame für last_command).
@@ -565,9 +574,45 @@ class MQTTClient:
         HA liest den Inhalt als Entity-Attribute des zugehörigen Sensors.
         """
         topic = f"{MQTT_TOPIC_PREFIX}/{device.slug}/{key}_attr"
-        self._client.publish(topic, json.dumps(attrs), retain=True)
+        self._publish_retained(topic, json.dumps(attrs), retain=True)
 
     # ---------- Interna ----------
+
+    def _publish_retained(self, topic: str, payload: str, retain: bool = True) -> None:
+        """Publish a retained message and remember it for republishing.
+
+        An empty payload clears the topic at the broker and forgets it.
+
+        Args:
+            topic: MQTT topic.
+            payload: Message payload ("" = clear).
+            retain: Always True for this helper (kept for call-site symmetry).
+        """
+        with self._retained_lock:
+            if payload == "":
+                self._retained.pop(topic, None)
+            else:
+                self._retained[topic] = payload
+        self._client.publish(topic, payload, retain=retain)
+
+    def republish_retained(self) -> None:
+        """Resend all remembered retained messages (discovery, states, diagnostics)."""
+        with self._retained_lock:
+            items = list(self._retained.items())
+        for topic, payload in items:
+            self._client.publish(topic, payload, retain=True)
+        if items:
+            logger.info("MQTT: %d retained Nachrichten erneut gesendet.", len(items))
+
+    def _on_ha_status(self, payload: str) -> None:
+        """Home Assistant (re)started — resend discovery and states.
+
+        Args:
+            payload: "online" when HA (re)started, "offline" when it stops.
+        """
+        if payload == "online":
+            logger.info("Home Assistant meldet 'online' — sende Discovery erneut.")
+            self.republish_retained()
 
     def _subscribe(self, topic: str, handler: Callable[[str], None]) -> None:
         self._client.subscribe(topic)
@@ -613,6 +658,9 @@ class MQTTClient:
         client.publish(LWT_TOPIC, "online", retain=True)
         for topic in self._handlers:
             client.subscribe(topic)
+        # After a reconnect the broker may have lost retained messages (restart
+        # without persistence) — resend them. Empty on the very first connect.
+        self.republish_retained()
 
     def _on_disconnect(
         self,

@@ -128,7 +128,7 @@ Jalousien usw.) über einen **NanoCUL USB-Stick** mit **culfw-Firmware** via **M
 | Sprache | Python 3.14 — Python-Minor in `FROM` (Dockerfile), `setup-python` (build.yaml) und `ruff.toml` immer gleich halten |
 | Protokoll | Somfy RTS (433,42 MHz) über NanoCUL USB (culfw) |
 | Kommunikation | MQTT (paho-mqtt 2.x, **Callback API v2**, Thread-Modus `loop_start`, Auto-Reconnect) → Home Assistant |
-| Web-UI | aiohttp (asyncio), HA Ingress Port 8099 |
+| Web-UI | aiohttp (asyncio) auf Container-Port 8099 — Zugriff über HA Ingress (mit HA-Anmeldung); Host-Port standardmäßig **geschlossen** (`ports: 8099/tcp: null`), da Web-UI/API keine eigene Anmeldung haben |
 | HA-Integration | MQTT Discovery (Cover/Light/Switch/Button/Sensor-Entitäten) |
 | Config | App-Options → `run.sh` → `SOMFY_*` Env-Variablen → `config.py` |
 | Abhängigkeiten | Exakt gepinnt (`==`): `requirements.txt` (Image: pyserial, paho-mqtt, aiohttp), `requirements-test.txt` (`-r requirements.txt` + pytest, ruff, yamllint) |
@@ -309,8 +309,13 @@ BaseGateway (ABC)          # gateway.py
 - Logging: `_on_connect_fail` (WARNING je Fehlversuch), `_on_disconnect` (WARNING bei
   Abbruch), `_on_connect` (ERROR bei abgelehnter Anmeldung, INFO mit Ausfalldauer und
   Fehlversuchen nach Wiederverbindung)
-- Nach einem Reconnect werden alle Command-Topics neu abonniert und `online` publiziert.
-  Discovery wird **nicht** neu gesendet (liegt retained beim Broker)
+- Nach einem Reconnect werden alle Command-Topics neu abonniert und `online` publiziert
+- **Retained-Cache:** Jede retained Nachricht (Discovery, State, Diagnose, Gateway-Werte —
+  nicht das LWT) läuft über `_publish_retained()`, das den letzten Payload je Topic merkt
+  (leerer Payload = Topic gelöscht und vergessen). `republish_retained()` sendet alles erneut:
+  nach **jedem** erfolgreichen Connect und wenn HA auf `homeassistant/status` `online` meldet
+  (HA-Neustart). So überleben Entitäten und Zustände einen Broker ohne Persistenz.
+  **Neue retained Publishes immer über `_publish_retained()`**, nie direkt `_client.publish()`
 
 ### MQTT Discovery Struktur
 
