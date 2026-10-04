@@ -50,4 +50,6 @@ configuration:
       Advanced controls in the Web UI: send any RTS command with a freely chosen
       repeat count. For troubleshooting only.
 network:
-  8099/tcp: Web UI (only needed for access without Home Assistant Ingress)
+  8099/tcp: >-
+    Direct access to the Web UI and REST API without authentication — disabled by
+    default. Not needed for the sidebar. Only open it on a trusted network.

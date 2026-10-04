@@ -68,6 +68,15 @@ Die App hat eine eigene Oberfläche (Seitenleiste **Somfy RTS** bzw. **App → W
 - **Logs:** die letzten gesendeten RTS-Frames
 - **Einstellungen:** aktuelle Konfiguration (Änderungen in der App-Konfiguration)
 
+**Zugriff:** Die Web-UI läuft über die Home-Assistant-Seitenleiste (Ingress) — dort mit
+HA-Anmeldung. Der direkte Port **8099 ist standardmäßig geschlossen**, denn Web-UI und
+REST-API haben **keine eigene Anmeldung**: Wer den Port erreicht, kann Geräte steuern,
+importieren und löschen.
+
+Direkten Zugriff (z. B. `http://<HA-IP>:8099` für Skripte) bei Bedarf freischalten:
+**App → Konfiguration → Netzwerk** → bei `8099/tcp` einen Host-Port eintragen und speichern.
+Feld leeren = wieder geschlossen. Nur in einem vertrauenswürdigen Netz verwenden.
+
 ---
 
 ## Gerätetypen

@@ -50,4 +50,6 @@ configuration:
       Erweiterte Steuerung in der Web-UI: beliebigen RTS-Befehl mit frei wählbarer
       Wiederholungszahl senden. Nur zur Fehlersuche.
 network:
-  8099/tcp: Web-UI (nur nötig für Zugriff ohne Home-Assistant-Ingress)
+  8099/tcp: >-
+    Direkter Zugriff auf Web-UI und REST-API ohne Anmeldung — standardmäßig aus.
+    Für die Seitenleiste nicht nötig. Nur im vertrauenswürdigen Netz öffnen.

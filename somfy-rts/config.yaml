@@ -19,7 +19,7 @@ map:
     read_only: false
 
 ports:
-  8099/tcp: 8099
+  8099/tcp: null
 
 ingress: true
 panel_icon: mdi:blinds
