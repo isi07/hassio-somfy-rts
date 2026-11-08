@@ -1,5 +1,5 @@
 # Runtime dependencies of the add-on image — pinned exactly for reproducible builds.
 # Dependabot proposes updates weekly (one grouped PR, see .github/dependabot.yaml).
 pyserial==3.5
-paho-mqtt==2.1.0
-aiohttp==3.14.3
+paho-mqtt==2.2.0
+aiohttp==3.14.5
